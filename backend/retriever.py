@@ -1,7 +1,7 @@
 import httpx
 import dspy  # type: ignore
 from dspy.dsp.utils import dotdict  # type: ignore
-from typing import Any, Optional, Union, override
+from typing import Any, override, cast
 from joblib import Memory  # type: ignore
 import os
 import asyncio
@@ -25,8 +25,8 @@ PREWARM_QUESTIONS = [
 memory = Memory(CACHE_DIR, verbose=0)
 
 
-@memory.cache
-def _cached_retrieval_sync(query: str, k: int) -> list[dict[str, Any]]:
+@memory.cache  # pyright: ignore[reportUnknownMemberType]
+def _cached_retrieval_sync(query: str, k: int) -> list[dict[str, Any]]:  # pyright: ignore[reportExplicitAny]
     """
     Synchronous cached retrieval function.
     Used by both the async wrapper (via thread) and the sync wrapper.
@@ -38,17 +38,17 @@ def _cached_retrieval_sync(query: str, k: int) -> list[dict[str, Any]]:
         try:
             # 1. ColBERT
             resp = client.get(COLBERT_URL, params={"query": query, "k": k}, timeout=2.0)
-            data = resp.json()
-            if isinstance(data, dict) and data.get("error") is True:
+            data = cast(dict[str, Any], resp.json())  # pyright: ignore[reportExplicitAny]
+            if data.get("error") is True:
                 raise Exception("Server Error")
 
             if "topk" in data:
-                return data["topk"][:k]
+                return cast(list[dict[str, Any]], data["topk"][:k])  # pyright: ignore[reportExplicitAny]
             elif "passages" in data:
                 # RAGatouille/other format normalization
-                passages = data["passages"]
-                scores = data.get("scores", [])
-                pids = data.get("pids", [])
+                passages = cast(list[str], data["passages"])
+                scores = cast(list[float], data.get("scores", []))
+                pids = cast(list[Any], data.get("pids", []))  # pyright: ignore[reportExplicitAny]
                 return [
                     {
                         "text": p,
@@ -75,12 +75,14 @@ def _cached_retrieval_sync(query: str, k: int) -> list[dict[str, Any]]:
                 headers=headers,
                 timeout=3.0,
             )
-            wiki_data = wiki_resp.json()
+            wiki_data = cast(list[Any], wiki_resp.json())  # pyright: ignore[reportExplicitAny]
             if not wiki_data or len(wiki_data) < 4:
                 return []
 
-            titles, descriptions, urls = wiki_data[1], wiki_data[2], wiki_data[3]
-            results = []
+            titles = cast(list[str], wiki_data[1])
+            descriptions = cast(list[str], wiki_data[2])
+            urls = cast(list[str], wiki_data[3])
+            results: list[dict[str, Any]] = []  # pyright: ignore[reportExplicitAny]
             for i, title in enumerate(titles):
                 text = (
                     f"Title: {title}\nSummary: {descriptions[i]}"
@@ -101,9 +103,7 @@ def _cached_retrieval_sync(query: str, k: int) -> list[dict[str, Any]]:
             return [{"text": "Failed to retrieve", "pid": -1, "score": 0.0}]
 
 
-async def fetch_colbert_results(
-    client: Optional[httpx.AsyncClient], query: str, k: int = 5
-) -> list[dict[str, Any]]:
+async def fetch_colbert_results(query: str, k: int = 5) -> list[dict[str, Any]]:  # pyright: ignore[reportExplicitAny]
     """
     Primary Retriever Entrypoint (Async).
     Now uses the cached sync function wrapped in asyncio.to_thread to handle I/O + Caching.
@@ -118,18 +118,12 @@ async def prewarm_cache():
     Fires off requests for known demo questions to populate the cache.
     """
     print("[Cache] Pre-warming started...")
-    # Use a throwaway async client just for consistency, but we rely on the sync cached function via thread
-    # Actually, fetch_colbert_results handles the client arg, but ignores it for the actual logic
-    # since it calls _cached_retrieval_sync which makes its own sync client.
-    # We can just call fetch_colbert_results with None as client since we refactored it to use to_thread.
 
     tasks = []
     for q in PREWARM_QUESTIONS:
-        tasks.append(
-            fetch_colbert_results(None, q, k=3)
-        )  # Client is ignored in the new impl
+        tasks.append(fetch_colbert_results(q, k=3))  # pyright: ignore[reportUnknownMemberType]
 
-    await asyncio.gather(*tasks)
+    _ = await asyncio.gather(*tasks)  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
     print("[Cache] Pre-warming complete.")
 
 
@@ -139,16 +133,16 @@ class AsyncColBERTv2RM(dspy.Retrieve):
     """
 
     def __init__(self, k: int = 3):
-        super().__init__(k=k)
+        super().__init__(k=k)  # pyright: ignore[reportUnknownMemberType]
 
     # Updated signature to match base class
     @override
     def forward(
         self,
-        query: Union[str, list[str]],
-        k: Optional[int] = None,
-        **kwargs: Any,
-    ) -> dspy.Prediction:
+        query: str | list[str],
+        k: int | None = None,
+        **kwargs: Any,  # pyright: ignore[reportExplicitAny]
+    ) -> dspy.Prediction:  # pyright: ignore[reportUnknownMemberType]
         k = k if k is not None else self.k
         # Handle single string vs list of strings
         queries = [query] if isinstance(query, str) else query
@@ -157,7 +151,7 @@ class AsyncColBERTv2RM(dspy.Retrieve):
         for q in queries:
             results = _cached_retrieval_sync(q, k)
             for r in results:
-                passages.append(
+                passages.append(  # pyright: ignore[reportUnknownMemberType]
                     dotdict(
                         {
                             "long_text": r.get("text", ""),
@@ -172,9 +166,9 @@ class AsyncColBERTv2RM(dspy.Retrieve):
         # OR a list of strings/Prediction objects depending on usage.
         # The base class signature says -> Prediction.
         # We will return it as `dspy.Prediction` (which is just a wrapper) to satisfy the type checker.
-        return dspy.Prediction(passages=passages)
+        return dspy.Prediction(passages=passages)  # pyright: ignore[reportUnknownMemberType]
 
 
 # Configure Global Retriever for DSPy
 rm = AsyncColBERTv2RM()
-dspy.settings.configure(rm=rm)
+dspy.settings.configure(rm=rm)  # pyright: ignore[reportUnknownMemberType]

@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from datasets import load_dataset  # type: ignore
-from typing import Optional, Any
+from typing import Any, cast
 
 # Configure logging
 logging.basicConfig(
@@ -10,7 +10,7 @@ logging.basicConfig(
 )
 
 
-def download_and_save_hotpotqa(output_dir: Optional[str] = None):
+def download_and_save_hotpotqa(output_dir: str | None = None):
     """
     Downloads the HotPotQA dataset (fullwiki) and saves train, validation (eval), and test splits.
     """
@@ -25,12 +25,12 @@ def download_and_save_hotpotqa(output_dir: Optional[str] = None):
 
         logging.info("Downloading HotPotQA dataset (fullwiki)...")
         try:
-            ds = load_dataset("hotpotqa/hotpot_qa", "fullwiki")
+            ds = load_dataset("hotpotqa/hotpot_qa", "fullwiki")  # pyright: ignore[reportUnknownVariableType]
         except Exception as e:
             logging.error(f"Primary download failed: {e}")
             logging.info("Attempting fallback: Loading with trust_remote_code=True...")
             try:
-                ds = load_dataset(
+                ds = load_dataset(  # pyright: ignore[reportUnknownVariableType]
                     "hotpotqa/hotpot_qa", "fullwiki", trust_remote_code=True
                 )
             except Exception as e2:
@@ -46,14 +46,14 @@ def download_and_save_hotpotqa(output_dir: Optional[str] = None):
         }
 
         for ds_split, file_name in split_mapping.items():
-            if ds_split in ds:
+            if ds_split in ds:  # type: ignore
                 file_path = os.path.join(output_dir, f"{file_name}.json")
                 logging.info(f"Saving {ds_split} to {file_path}...")
                 try:
                     # Saving as json
                     # Cast to Any to avoid 'to_json' attribute error on Unknown type
-                    split_data: Any = ds[ds_split]
-                    split_data.to_json(file_path)
+                    split_data = cast(Any, ds[ds_split])  # pyright: ignore[reportExplicitAny]
+                    split_data.to_json(file_path)  # pyright: ignore[reportUnknownMemberType]
                     logging.info(f"Successfully saved {file_name}.json")
                 except Exception as save_err:
                     logging.error(f"Failed to save {ds_split}: {save_err}")
@@ -61,9 +61,9 @@ def download_and_save_hotpotqa(output_dir: Optional[str] = None):
                     try:
                         with open(file_path, "w", encoding="utf-8") as f:
                             # Cast to Any for iteration
-                            split_data_iter: Any = ds[ds_split]
-                            for item in split_data_iter:
-                                f.write(json.dumps(item) + "\n")
+                            split_data_iter = cast(Any, ds[ds_split])  # pyright: ignore[reportExplicitAny]
+                            for item in split_data_iter:  # pyright: ignore[reportAny]
+                                f.write(json.dumps(item) + "\n")  # pyright: ignore[reportUnusedCallResult, reportAny]
                         logging.info(f"Fallback save successful for {file_name}.json")
                     except Exception as fb_err:
                         logging.error(f"Fallback save failed for {ds_split}: {fb_err}")

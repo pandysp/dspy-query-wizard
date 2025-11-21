@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
-import httpx
 from contextlib import asynccontextmanager
 
 # Import the refactored retriever logic
@@ -9,7 +8,7 @@ from backend.retriever import fetch_colbert_results, prewarm_cache
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_: FastAPI):
     # Startup
     await prewarm_cache()
     yield
@@ -34,9 +33,8 @@ async def query(request: QueryRequest):
         raise HTTPException(status_code=400, detail="No question provided")
 
     try:
-        async with httpx.AsyncClient() as client:
-            # Use the robust fetch function (handles ColBERT -> Wikipedia fallback)
-            raw_results = await fetch_colbert_results(client, request.question, k=3)
+        # Use the robust fetch function (handles ColBERT -> Wikipedia fallback)
+        raw_results = await fetch_colbert_results(request.question, k=3)
 
         retrieved_text = [r.get("text", str(r)) for r in raw_results]
 
