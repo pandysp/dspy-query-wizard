@@ -11,10 +11,18 @@ dependencies = [
     "httpx>=0.28.1",
     "joblib>=1.5.2",
     "transformers>=4.57.1",
+    "typing-extensions>=4.12.2",
     "uvicorn>=0.38.0",
 ]
 
 [dependency-groups]
 dev = [
+    "basedpyright>=1.28.0",
     "pytest>=9.0.1",
+    "pyright>=1.1.396",
+    "ruff>=0.9.9",
 ]
+
+[tool.pyright]
+# Only ignore missing stubs for libraries that truly don't have them
+reportMissingTypeStubs = false 
