@@ -1,1 +1,15 @@
+# Environments
 .venv/
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Beads
+.beads/
+
+# IDE
+.vscode/
+.idea/
