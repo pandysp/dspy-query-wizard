@@ -1,24 +1,27 @@
-from flask import Flask, jsonify, request
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import uvicorn
 
-app = Flask(__name__)
+app = FastAPI()
 
-@app.route('/')
+class QueryRequest(BaseModel):
+    question: str
+
+@app.get("/")
 def home():
-    return jsonify({"message": "Welcome to the DSPy Query Wizard API"})
+    return {"message": "Welcome to the DSPy Query Wizard API"}
 
-@app.route('/api/query', methods=['POST'])
-def query():
-    data = request.json
-    question = data.get('question')
-    if not question:
-        return jsonify({"error": "No question provided"}), 400
+@app.post("/api/query")
+def query(request: QueryRequest):
+    if not request.question:
+        raise HTTPException(status_code=400, detail="No question provided")
     
     # Placeholder for logic
-    return jsonify({
-        "question": question,
+    return {
+        "question": request.question,
         "human_answer": "Not implemented yet",
         "machine_answer": "Not implemented yet"
-    })
+    }
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
