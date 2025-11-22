@@ -32,7 +32,7 @@ We are keeping this lean to move fast.
 
 - **The Data:** **HotPotQA** (A pre-existing dataset of "hard" multi-step questions) + **Wikipedia**.
 
-  - _Note:_ We are **NOT** scraping our own data. We are connecting to a public, pre-indexed Wikipedia server to save time.
+  - _Note:_ We are using a **local ColBERTv2 server** (hosted via `colbert-server`) to ensure reliability and speed, replacing the unstable public index.
 
 - **The Backend:** **FastAPI**. Serves the logic and runs the comparison.
 
@@ -44,7 +44,7 @@ We are keeping this lean to move fast.
 
 To ensure we finish on time, we are adhering to these constraints:
 
-1. **No Custom Indexing:** We use the public ColBERTv2/Wikipedia index.
+1. **Local Indexing:** We use a local ColBERTv2/Wikipedia index (cached).
 
 2. **Small Training Set:** We will train the optimizer on just 20–50 examples from the HotPotQA dataset.
 
