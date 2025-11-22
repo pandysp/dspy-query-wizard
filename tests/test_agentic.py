@@ -8,7 +8,7 @@ async def test_agentic_rag_initialization():
     """Test that AgenticRAG initializes dspy.ReAct with the correct tool."""
     
     with patch("backend.rag.dspy.ReAct") as MockReAct, \
-         patch("backend.rag.retrieve") as mock_retrieve:
+         patch("backend.rag.search_wikipedia") as mock_retrieve:
         
         rag = AgenticRAG()
         
@@ -20,19 +20,17 @@ async def test_agentic_rag_initialization():
 
 @pytest.mark.asyncio
 async def test_agentic_rag_forward():
-    """Test AgenticRAG forward pass delegates to ReAct and extracts context."""
+    """Test AgenticRAG forward pass delegates to ReAct and extracts context from trajectory."""
     with patch("backend.rag.dspy.ReAct") as MockReAct:
         mock_react_instance = MagicMock()
         MockReAct.return_value = mock_react_instance
         
-        # Mock ReAct output with history containing observations
-        # History is typically a list of items (strings/actions)
-        # Observation usually follows Action.
+        # Mock ReAct output with trajectory (ReAct specific field)
         mock_react_instance.return_value = dspy.Prediction(
             answer="Nolan",
-            history=[
+            trajectory=[
                 "Thought: Find director.",
-                "Action: retrieve('Inception')",
+                "Action: search_wikipedia('Inception')",
                 "Observation: ['Inception is directed by Christopher Nolan.']",
                 "Thought: Answer found."
             ]
@@ -42,7 +40,7 @@ async def test_agentic_rag_forward():
         result = rag("Question")
         
         assert result.answer == "Nolan"
-        # Verify context extraction
+        # Verify context extraction from trajectory
         assert "Inception is directed by Christopher Nolan." in str(result.context)
         mock_react_instance.assert_called_once()
 

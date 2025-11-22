@@ -39,6 +39,10 @@ def train(sample_size: int = 20) -> None:
     Trains the AgenticRAG pipeline using BootstrapFewShot.
     """
     configure_lm()
+    
+    # Configure a stronger teacher model to generate traces
+    api_key = os.getenv("OPENAI_API_KEY")
+    teacher_lm = dspy.LM("openai/gpt-5.1", api_key=api_key)
 
     # 1. Load Training Data
     data_path = os.path.join(os.path.dirname(__file__), "data", "train.json")
@@ -81,13 +85,17 @@ def train(sample_size: int = 20) -> None:
     student = AgenticRAG()
 
     # 3. Define Optimizer
-    # We optimize for Retrieval Recall (answer appearing in context)
+    # We optimize for Retrieval Recall
+    # Use teacher_settings to use for bootstrapping traces
     teleprompter = BootstrapFewShot(
-        metric=answer_in_context, max_bootstrapped_demos=4, max_labeled_demos=4
+        metric=answer_in_context, 
+        max_bootstrapped_demos=4, 
+        max_labeled_demos=4,
+        teacher_settings=dict(lm=teacher_lm)
     )
 
     # 4. Compile
-    logger.info("Starting compilation (Agentic)...")
+    logger.info("Starting compilation (Agentic) with Teacher (gpt-5.1)...")
     try:
         compiled_rag = teleprompter.compile(student, trainset=trainset)
         

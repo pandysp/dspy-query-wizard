@@ -122,10 +122,11 @@ def _cached_retrieval_sync(query: str, k: int) -> list[RetrievalResult]:
             return [RetrievalResult(text="Failed to retrieve", pid=-1, score=0.0)]
 
 
-def retrieve(query: str, k: int = 3) -> list[str]:
+def search_wikipedia(query: str, k: int = 3) -> list[str]:
     """
-    Simplified functional interface for DSPy modules.
-    Returns a list of strings (passages) directly.
+    Search Wikipedia for documents relevant to the query.
+    Use this tool to find facts, dates, places, and people.
+    Returns a list of relevant text passages.
     """
     results = _cached_retrieval_sync(query, k)
     return [r["text"] for r in results]
