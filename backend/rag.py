@@ -26,7 +26,7 @@ class HumanRAG(dspy.Module):  # type: ignore[misc]
         context = retrieve(question, k=3)
         
         prediction = self.generate_answer(context=context, question=question)
-        return dspy.Prediction(context=context, answer=prediction.answer)  # type: ignore
+        return dspy.Prediction(context=context, answer=str(prediction.answer))  # type: ignore
 
 
 class GenerateSearchQuery(dspy.Signature):  # type: ignore[misc]
@@ -69,5 +69,5 @@ class MachineRAG(dspy.Module):  # type: ignore[misc]
         prediction = self.generate_answer(context=context, question=question)
 
         return dspy.Prediction(
-            context=context, answer=prediction.answer, search_query=search_query
+            context=context, answer=str(prediction.answer), search_query=search_query
         )  # type: ignore
