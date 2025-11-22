@@ -4,17 +4,35 @@ import json
 import logging
 from dspy.teleprompt import BootstrapFewShot  # type: ignore
 from dspy.evaluate import answer_exact_match  # type: ignore
+from dotenv import load_dotenv
 from backend.rag import MachineRAG
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Load environment variables
+load_dotenv()
+
+def configure_lm() -> None:
+    """Configures the Language Model."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        logger.warning("OPENAI_API_KEY not found. DSPy optimization will likely fail.")
+        return
+
+    # Use gpt-4o-mini as default cost-effective model
+    lm = dspy.LM("openai/gpt-4o-mini", api_key=api_key)
+    dspy.settings.configure(lm=lm)
+    logger.info("LM configured: openai/gpt-4o-mini")
+
 
 def train(sample_size: int = 20) -> None:
     """
     Trains the MachineRAG pipeline using BootstrapFewShot.
     """
+    configure_lm()
+
     # 1. Load Training Data
     data_path = os.path.join(os.path.dirname(__file__), "data", "train.json")
     if not os.path.exists(data_path):
@@ -79,7 +97,4 @@ def train(sample_size: int = 20) -> None:
 
 
 if __name__ == "__main__":
-    # Ensure DSPy is configured (usually done in app.py or by environment)
-    # For standalone script, we might need to configure it.
-    # dspy.settings.configure(lm=..., rm=...)
     train()

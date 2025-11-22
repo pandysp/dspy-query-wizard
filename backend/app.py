@@ -4,6 +4,8 @@ import uvicorn
 from contextlib import asynccontextmanager
 import os
 import logging
+import dspy  # type: ignore
+from dotenv import load_dotenv
 
 # Import the refactored retriever logic and RAG modules
 from backend.retriever import prewarm_cache
@@ -13,9 +15,25 @@ from backend.rag import HumanRAG, MachineRAG
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Load environment variables
+load_dotenv()
+
 # Global instances
 human_rag: HumanRAG | None = None
 machine_rag: MachineRAG | None = None
+
+
+def configure_lm() -> None:
+    """Configures the Language Model."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        logger.warning("OPENAI_API_KEY not found. Machine RAG will fail.")
+        return
+
+    # Use gpt-4o-mini as default
+    lm = dspy.LM("openai/gpt-4o-mini", api_key=api_key)
+    dspy.settings.configure(lm=lm)
+    logger.info("LM configured: openai/gpt-4o-mini")
 
 
 @asynccontextmanager
@@ -23,6 +41,8 @@ async def lifespan(_: FastAPI):
     global human_rag, machine_rag
 
     # Startup
+    configure_lm()
+    
     logger.info("Initializing RAG pipelines...")
     human_rag = HumanRAG()
     machine_rag = MachineRAG()
