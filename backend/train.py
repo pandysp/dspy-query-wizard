@@ -1,3 +1,7 @@
+import dspy  # type: ignore
+import os
+import json
+import logging
 from dspy.teleprompt import BootstrapFewShot  # type: ignore
 from dspy.evaluate import answer_exact_match  # type: ignore
 from dotenv import load_dotenv

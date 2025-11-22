@@ -31,7 +31,7 @@ async def test_human_rag_forward():
     # Mock LM
     mock_lm = MockLM(['{"reasoning": "Because it is.", "answer": "Paris"}'])
     
-    with patch("backend.rag.retrieve") as mock_retrieve:
+    with patch("backend.rag.search_wikipedia") as mock_retrieve:
         mock_retrieve.return_value = ["Paris is the capital of France."]
         
         rag = HumanRAG()
@@ -58,7 +58,7 @@ async def test_human_rag_manual_queries():
 
     mock_lm = MockLM(['{"reasoning": "Combined info.", "answer": "Paris"}'])
     
-    with patch("backend.rag.retrieve") as mock_retrieve:
+    with patch("backend.rag.search_wikipedia") as mock_retrieve:
         # Mock returning different contexts for different queries
         def side_effect(query, k=3):
             if "query1" in query:
@@ -107,7 +107,7 @@ async def test_machine_rag_forward():
 
     mock_lm = SmartMockLM()
     
-    with patch("backend.rag.retrieve") as mock_retrieve:
+    with patch("backend.rag.search_wikipedia") as mock_retrieve:
         mock_retrieve.return_value = ["Paris is the capital of France."]
         
         rag = MachineRAG()
@@ -145,7 +145,7 @@ async def test_machine_rag_complex_output():
 
     mock_lm = ComplexMockLM()
     
-    with patch("backend.rag.retrieve") as mock_retrieve:
+    with patch("backend.rag.search_wikipedia") as mock_retrieve:
         mock_retrieve.return_value = ["Context"]
         
         rag = MachineRAG()
