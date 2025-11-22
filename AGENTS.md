@@ -54,11 +54,21 @@ The backend uses a **functional-first approach** with async/await throughout.
 - **Fallback:** Wikipedia OpenSearch API (ensures system works even if ColBERT is down).
 - **Caching:** Uses `joblib.Memory` for file-based caching (`.cache/` directory).
 - **`fetch_colbert_results()`** - Async entrypoint wrapping cached sync retrieval.
-- **`AsyncColBERTv2RM`** - DSPy-compatible retriever class for optimizer loop (synchronous), configured globally via `dspy.settings`.
+- **`retrieve()`** - Functional interface returning `list[str]` (passages), used by DSPy modules.
+
+**`backend/rag.py`** - DSPy RAG Pipelines:
+- **`HumanRAG`:** Standard Retrieve-then-Answer pipeline using `retrieve()`.
+- **`MachineRAG`:** Optimized pipeline with Query Rephrasing (`question -> search_query`) and Answering.
+  - **Robustness:** Handles structured LM outputs (dict/list) for `search_query` by sanitizing them to strings, accommodating models like `gpt-4o-mini` that may return JSON despite instructions.
 
 **`backend/utils/data_preprocess.py`** - HotPotQA dataset download utility:
 - Downloads HotPotQA fullwiki dataset.
 - Saves train/eval/test splits to `backend/data/`.
+
+**`backend/train.py`** - Optimization Script:
+- Loads training data (`backend/data/train.json`).
+- Optimizes `MachineRAG` using `BootstrapFewShot`.
+- Saves compiled program to `backend/data/compiled_machine_rag.json`.
 
 ### Key Design Patterns
 
@@ -77,6 +87,9 @@ The backend uses a **functional-first approach** with async/await throughout.
    - Retrieval logic (ColBERT + Wikipedia + caching) lives in one file.
    - Avoid splitting related logic into separate utils/helpers.
 
+4. **Functional Retrieval:**
+   - Removed class-based `ColBERTv2RM` abstraction in favor of a simple `retrieve()` function to improve type safety and reduce global state complexity.
+
 ### Frontend Structure
 
 React 19 + TypeScript + Vite + Tailwind CSS 4. Currently minimal scaffolding.
@@ -84,6 +97,26 @@ React 19 + TypeScript + Vite + Tailwind CSS 4. Currently minimal scaffolding.
 ### Testing
 
 Tests use `pytest` with `pytest-asyncio` for async support. Tests mock httpx.Client to avoid external dependencies.
+
+---
+
+## Training & Optimization
+
+### Configuration
+Create a `.env` file (see `.env.example`) with:
+- `OPENAI_API_KEY`: Required for optimization.
+- `OPENAI_MODEL`: Target model (default: `gpt-4o-mini`, recommended: `gpt-5-nano` if available).
+
+### Training Process
+1.  **Download Data:** `uv run python backend/utils/data_preprocess.py`
+2.  **Run Optimization:** `uv run python backend/train.py`
+    - Uses `dspy.teleprompt.BootstrapFewShot`.
+    - Optimizes for `answer_exact_match`.
+    - Produces `backend/data/compiled_machine_rag.json`.
+
+### Artifacts
+- **`compiled_machine_rag.json`:** Contains the "frozen" weights (few-shot examples) for `MachineRAG`.
+- `backend/app.py` automatically loads this file on startup if present.
 
 ---
 
@@ -103,6 +136,9 @@ just colbert-logs        # View server logs
 
 # Run the FastAPI server (auto-reload enabled)
 just run
+
+# Run Optimization (Training)
+uv run python backend/train.py
 
 # Run all tests
 just test
