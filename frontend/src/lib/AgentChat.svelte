@@ -15,6 +15,7 @@
     UnknownPart,
   } from "./message-parts";
   import { cn } from "./utils";
+  import { inputPrompts, selectedInputPrompt } from "./configStore.svelte";
 
   let input = $state("");
   let isLoading = $state(false);
@@ -24,6 +25,15 @@
   const chat = new Chat({
     transport: new DefaultChatTransport({
       api: "http://127.0.0.1:8000/api/chat",
+      prepareSendMessagesRequest: ({ id, messages }) => {
+        return {
+          body: {
+            id,
+            messages,
+            system_message: systemMessagePrompt,
+          },
+        };
+      },
     }),
     onFinish: (finish) => {
       isLoading = false;
@@ -34,15 +44,6 @@
   });
 
   const showReasoning = $state(false);
-
-  function handleSubmit(event: SubmitEvent) {
-    event.preventDefault();
-    if (input.trim() && !isLoading) {
-      isLoading = true;
-      chat.sendMessage({ text: input });
-      input = "";
-    }
-  }
 
   // Debug: Log messages as they update
   $effect(() => {
@@ -60,115 +61,6 @@
     }
   });
 
-  // Demo transcript: Multi-hop tool use and intermediate reasoning
-  const fakeMessages = [
-    {
-      role: "user",
-      parts: [
-        {
-          type: "text",
-          text: "What's the weather in Berlin and Dusseldorf?",
-        },
-      ],
-    },
-    {
-      role: "agent",
-      parts: [
-        // First tool called (Berlin)
-        {
-          type: "tool-get_current_weather",
-          input: {
-            kwargs: {
-              location: "Berlin",
-              unit: { default: "fahrenheit" },
-            },
-          },
-          state: "input-available",
-        },
-        {
-          type: "tool-get_current_weather",
-          input: {
-            kwargs: {
-              location: "Berlin",
-              unit: { default: "fahrenheit" },
-            },
-          },
-          output: {
-            temperature: 79,
-            unit: { default: "fahrenheit" },
-            location: "Berlin",
-          },
-          state: "output-available",
-        },
-        // Reasoning: Calling tool for Berlin
-        {
-          type: "reasoning",
-          status: "calling_tool",
-          toolName: "get_current_weather",
-        },
-        // Reasoning: Tool complete for Berlin
-        {
-          type: "reasoning",
-          status: "tool_complete",
-          toolName: "get_current_weather",
-        },
-
-        // Second tool called (Dusseldorf)
-        {
-          type: "tool-get_current_weather",
-          input: {
-            kwargs: {
-              location: "Dusseldorf",
-              unit: { default: "fahrenheit" },
-            },
-          },
-          state: "input-available",
-        },
-        {
-          type: "tool-get_current_weather",
-          input: {
-            kwargs: {
-              location: "Dusseldorf",
-              unit: { default: "fahrenheit" },
-            },
-          },
-          output: {
-            temperature: 55,
-            unit: { default: "fahrenheit" },
-            location: "Dusseldorf",
-          },
-          state: "output-available",
-        },
-        // Reasoning: Calling tool for Dusseldorf
-        {
-          type: "reasoning",
-          status: "calling_tool",
-          toolName: "get_current_weather",
-        },
-        // Reasoning: Tool complete for Dusseldorf
-        {
-          type: "reasoning",
-          status: "tool_complete",
-          toolName: "get_current_weather",
-        },
-
-        // Final reasoning/thinking step
-        {
-          type: "reasoning",
-          status: "thinking",
-        },
-        {
-          type: "text",
-          text: "Berlin: 79°F. Dusseldorf: 55°F.",
-        },
-        {
-          type: "reasoning",
-          status: "done_thinking",
-        },
-      ],
-    },
-  ];
-
   const getRoleEmoji = (role: string) => {
     switch (role) {
       case "user":
@@ -181,7 +73,7 @@
   };
 
   const fullMessages = $derived(() => {
-    const backendMessages = fakeMessages;
+    const backendMessages = chat.messages;
     const messages = [
       {
         role: "system",
@@ -216,6 +108,15 @@
 
     return messages;
   });
+
+  // Start loading
+  const inputPrompt = inputPrompts.prompts.find(
+    (p) => p.id === selectedInputPrompt.id,
+  )?.prompt;
+  if (inputPrompt) {
+    chat.sendMessage({ text: inputPrompt });
+    isLoading = true;
+  }
 </script>
 
 <div class="px-2">
@@ -300,7 +201,7 @@
 
     {#if isLoading}
       <div class="text-center text-gray-500 py-4">
-        <div class="animate-pulse">⏳ Agent is processing...</div>
+        <div class="animate-pulse">Agent is processing...</div>
       </div>
     {/if}
   </div>

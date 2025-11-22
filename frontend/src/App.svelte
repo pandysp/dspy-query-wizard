@@ -20,12 +20,14 @@
 </script>
 
 <main class="bg-gray-900 text-gray-400 min-h-screen">
-  {#if !running && !loading}
-    <InputEdit
-      onRunClicked={() => {
-        running = true;
-      }}
-    />
+  {#if !running}
+    {#if !loading}
+      <InputEdit
+        onRunClicked={() => {
+          running = true;
+        }}
+      />
+    {/if}
   {:else}
     <div class="relative grid grid-cols-2 w-full gap-0 pt-12">
       <AgentChat systemMessagePrompt={sytemMessages.default} />

@@ -517,6 +517,3 @@ async def get_input_prompts():
             "prompt": "Why is the sky blue?",
         },
     ]
-
-
-uo1
