@@ -18,6 +18,17 @@ just colbert-logs
 **First run:** 10-30 minutes for the 13GB download
 **Subsequent runs:** Server starts immediately (< 5 seconds)
 
+## Configuration
+
+1.  **Copy the example environment file:**
+    ```bash
+    cp .env.example .env
+    ```
+2.  **Add your API Keys:**
+    Open `.env` and set your `OPENAI_API_KEY`. This is required for:
+    *   Running the DSPy optimizer (Training).
+    *   Using the Machine RAG pipeline with a real LLM.
+
 ## Daily Workflow
 
 ```bash
@@ -30,6 +41,20 @@ just run
 # Terminal 3: Run frontend (optional)
 cd frontend && pnpm dev
 ```
+
+## Training (Optional)
+
+To optimize the Machine RAG pipeline using HotPotQA data:
+
+1.  **Download Dataset:**
+    ```bash
+    uv run python backend/utils/data_preprocess.py
+    ```
+2.  **Run Training:**
+    ```bash
+    uv run python backend/train.py
+    ```
+    *Requires `OPENAI_API_KEY` in `.env`.*
 
 ## Common Commands
 
