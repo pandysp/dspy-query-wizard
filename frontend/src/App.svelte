@@ -31,7 +31,7 @@
   {:else}
     <div class="relative grid grid-cols-2 w-full gap-0 pt-12">
       <AgentChat systemMessagePrompt={sytemMessages.default} />
-      <AgentChat systemMessagePrompt={sytemMessages.optimized} />
+      <AgentChat systemMessagePrompt={sytemMessages.optimized} isOptimized />
 
       <div
         class="absolute translate-x-[-50%] top-4 bottom-4 left-1/2 w-px bg-gray-700"

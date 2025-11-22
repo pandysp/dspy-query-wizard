@@ -17,22 +17,31 @@
   import { cn } from "./utils";
   import { inputPrompts, selectedInputPrompt } from "./configStore.svelte";
 
-  let input = $state("");
   let isLoading = $state(false);
 
-  const { systemMessagePrompt }: { systemMessagePrompt: string } = $props();
+  const {
+    systemMessagePrompt,
+    isOptimized,
+  }: { systemMessagePrompt: string; isOptimized?: boolean } = $props();
 
   const chat = new Chat({
     transport: new DefaultChatTransport({
       api: "http://127.0.0.1:8000/api/chat",
-      prepareSendMessagesRequest: ({ id, messages }) => {
-        return {
-          body: {
-            id,
-            messages,
-            system_message: systemMessagePrompt,
-          },
+      prepareSendMessagesRequest: ({ id, messages, trigger }) => {
+        const body = {
+          id,
+          messages,
+          trigger,
+        } as {
+          id: string;
+          messages: typeof messages;
+          system_message?: string;
+          trigger: typeof trigger;
         };
+        if (!isOptimized) {
+          body.system_message = systemMessagePrompt;
+        }
+        return { body };
       },
     }),
     onFinish: (finish) => {
@@ -42,8 +51,6 @@
       isLoading = false;
     },
   });
-
-  const showReasoning = $state(false);
 
   // Debug: Log messages as they update
   $effect(() => {
@@ -95,11 +102,6 @@
             "input" in part &&
             part.input !== undefined &&
             part.state !== "output-available";
-
-          // If showReasoning is false, filter out all reasoning parts
-          if (!showReasoning && part.type === "reasoning") {
-            return false;
-          }
 
           return !isIncompleteToolCall;
         }),
