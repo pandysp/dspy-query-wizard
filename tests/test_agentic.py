@@ -20,16 +20,29 @@ async def test_agentic_rag_initialization():
 
 @pytest.mark.asyncio
 async def test_agentic_rag_forward():
-    """Test AgenticRAG forward pass delegates to ReAct."""
+    """Test AgenticRAG forward pass delegates to ReAct and extracts context."""
     with patch("backend.rag.dspy.ReAct") as MockReAct:
         mock_react_instance = MagicMock()
         MockReAct.return_value = mock_react_instance
         
-        mock_react_instance.return_value = dspy.Prediction(answer="Nolan")
+        # Mock ReAct output with history containing observations
+        # History is typically a list of items (strings/actions)
+        # Observation usually follows Action.
+        mock_react_instance.return_value = dspy.Prediction(
+            answer="Nolan",
+            history=[
+                "Thought: Find director.",
+                "Action: retrieve('Inception')",
+                "Observation: ['Inception is directed by Christopher Nolan.']",
+                "Thought: Answer found."
+            ]
+        )
         
         rag = AgenticRAG()
         result = rag("Question")
         
         assert result.answer == "Nolan"
+        # Verify context extraction
+        assert "Inception is directed by Christopher Nolan." in str(result.context)
         mock_react_instance.assert_called_once()
 

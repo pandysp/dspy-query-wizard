@@ -97,4 +97,23 @@ class AgenticRAG(dspy.Module):  # type: ignore[misc]
         self.react = dspy.ReAct(AgenticSignature, tools=[retrieve])  # type: ignore
 
     def forward(self, question: str) -> dspy.Prediction:  # type: ignore[misc]
-        return self.react(question=question)  # type: ignore
+        prediction = self.react(question=question)  # type: ignore
+        
+        # Extract context from history observations
+        context: list[str] = []
+        history = getattr(prediction, "history", [])
+        
+        for step in history:
+            # step is usually a string in ReAct history
+            if isinstance(step, str) and step.startswith("Observation:"):
+                # Extract content after "Observation:"
+                content = step.replace("Observation:", "", 1).strip()
+                # If content looks like a list string "['...']", try to clean it up slightly
+                # but keeping raw content is safer than fragile parsing.
+                context.append(content)
+        
+        return dspy.Prediction(
+            answer=prediction.answer,
+            history=history,
+            context=context
+        )
