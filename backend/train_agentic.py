@@ -5,7 +5,7 @@ import logging
 from dspy.teleprompt import BootstrapFewShot  # type: ignore
 from dspy.evaluate import answer_exact_match  # type: ignore
 from dotenv import load_dotenv
-from backend.rag import MachineRAG
+from backend.rag import AgenticRAG
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -21,10 +21,8 @@ def configure_lm() -> None:
         logger.warning("OPENAI_API_KEY not found. DSPy optimization will likely fail.")
         return
 
+    # Default to gpt-5-nano as requested
     model_name = os.getenv("OPENAI_MODEL", "gpt-5-nano")
-    # Ensure model name has provider prefix if needed, though dspy.LM usually handles 'openai/'
-    # If user provides 'gpt-5-nano', we prepend 'openai/' if missing for clarity, 
-    # but dspy/litellm might need it.
     if not model_name.startswith("openai/"):
         full_model_name = f"openai/{model_name}"
     else:
@@ -37,7 +35,7 @@ def configure_lm() -> None:
 
 def train(sample_size: int = 20) -> None:
     """
-    Trains the MachineRAG pipeline using BootstrapFewShot.
+    Trains the AgenticRAG pipeline using BootstrapFewShot.
     """
     configure_lm()
 
@@ -67,9 +65,6 @@ def train(sample_size: int = 20) -> None:
 
         # Convert to DSPy Examples
         for item in raw_data[:sample_size]:
-            # HotPotQA structure usually has question, answer, supporting_facts
-            # We need to map to our signature inputs: 'question'
-            # And provide labels for metric: 'answer'
             example = dspy.Example(
                 question=item["question"], answer=item["answer"]
             ).with_inputs("question")
@@ -81,27 +76,31 @@ def train(sample_size: int = 20) -> None:
 
     logger.info(f"Loaded {len(trainset)} examples.")
 
-    # 2. Initialize Student (MachineRAG)
-    # We use the default retriever (ColBERTv2)
-    student = MachineRAG()
+    # 2. Initialize Student (AgenticRAG)
+    student = AgenticRAG()
 
     # 3. Define Optimizer
     # We optimize for exact match on the final answer
+    # BootstrapFewShot works for ReAct by extracting successful traces
     teleprompter = BootstrapFewShot(
         metric=answer_exact_match, max_bootstrapped_demos=4, max_labeled_demos=4
     )
 
     # 4. Compile
-    logger.info("Starting compilation...")
-    compiled_rag = teleprompter.compile(student, trainset=trainset)
-
-    # 5. Save
-    output_path = os.path.join(
-        os.path.dirname(__file__), "data", "compiled_machine_rag.json"
-    )
-    logger.info(f"Saving compiled program to {output_path}...")
-    compiled_rag.save(output_path)
-    logger.info("Training complete.")
+    logger.info("Starting compilation (Agentic)...")
+    try:
+        compiled_rag = teleprompter.compile(student, trainset=trainset)
+        
+        # 5. Save
+        output_path = os.path.join(
+            os.path.dirname(__file__), "data", "compiled_agentic_rag.json"
+        )
+        logger.info(f"Saving compiled program to {output_path}...")
+        compiled_rag.save(output_path)
+        logger.info("Training complete.")
+        
+    except Exception as e:
+        logger.error(f"Compilation failed: {e}")
 
 
 if __name__ == "__main__":

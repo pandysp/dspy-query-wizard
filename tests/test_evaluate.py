@@ -15,10 +15,10 @@ async def test_evaluate_process():
                 read_data='{"question": "q", "answer": "a", "supporting_facts": []}'
             ),
         ) as _mock_file,
-        patch("backend.evaluate.MachineRAG") as MockMachineRAG,
-        patch("backend.evaluate.HumanRAG") as MockHumanRAG,
-        patch("os.path.exists") as mock_exists,
-        patch("backend.evaluate.configure_lm") as _mock_configure_lm,
+                    patch("backend.evaluate.MachineRAG") as MockMachineRAG,
+                    patch("backend.evaluate.HumanRAG") as MockHumanRAG,
+                    patch("backend.rag.AgenticRAG") as MockAgenticRAG,
+                    patch("os.path.exists") as mock_exists,        patch("backend.evaluate.configure_lm") as _mock_configure_lm,
     ):
         mock_exists.return_value = True
         
@@ -26,7 +26,7 @@ async def test_evaluate_process():
         mock_evaluator_instance = MagicMock()
         MockEvaluator.return_value = mock_evaluator_instance
         # Return dummy scores
-        mock_evaluator_instance.side_effect = [50.0, 80.0] # Human=50, Machine=80
+        mock_evaluator_instance.side_effect = [50.0, 80.0, 75.0] # Human, Machine, Agentic
         
         from backend.evaluate import evaluate
         
@@ -36,5 +36,5 @@ async def test_evaluate_process():
         # Verify Evaluator initialized
         MockEvaluator.assert_called_once()
         
-        # Verify both pipelines evaluated
-        assert mock_evaluator_instance.call_count == 2
+        # Verify all 3 pipelines evaluated
+        assert mock_evaluator_instance.call_count == 3

@@ -31,7 +31,7 @@ def configure_lm() -> None:
         logger.warning("OPENAI_API_KEY not found. Machine RAG will fail.")
         return
 
-    model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    model_name = os.getenv("OPENAI_MODEL", "gpt-5-nano")
     if not model_name.startswith("openai/"):
         full_model_name = f"openai/{model_name}"
     else:
