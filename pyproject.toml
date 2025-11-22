@@ -16,7 +16,23 @@ dependencies = [
     "typing-extensions>=4.12.2",
     "uvicorn>=0.38.0",
     "openai>=1.0.0",
+    "torch",
+    "torchvision",
+    "torchaudio",
+    "colbert-ai",
+    "flask",
+    "faiss-cpu",
 ]
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch" }]
+torchvision = [{ index = "pytorch" }]
+torchaudio = [{ index = "pytorch" }]
 
 [dependency-groups]
 dev = [
