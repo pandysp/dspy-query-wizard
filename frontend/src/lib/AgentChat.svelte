@@ -2,6 +2,19 @@
   import { Chat } from "@ai-sdk/svelte";
   import { DefaultChatTransport } from "ai";
 
+  // Import message part components
+  import {
+    TextPart,
+    ToolCallPart,
+    ToolCalledPart,
+    ToolResultPart,
+    ToolErrorPart,
+    ToolStatePart,
+    ToolNoStatePart,
+    ReasoningPart,
+    UnknownPart,
+  } from "./message-parts";
+
   let input = $state("");
   let isLoading = $state(false);
 
@@ -16,8 +29,14 @@
     onData: (data) => {
       console.log("📦 data", data);
     },
-    onToolCall: (toolCall) => {
-      console.log("🔧 toolCall", toolCall);
+    onToolCall: ({ toolCall }) => {
+      console.log("🔧 toolCall", {
+        toolCallId: toolCall.toolCallId,
+        state: "state" in toolCall ? toolCall.state : "no-state",
+        hasInput: "input" in toolCall,
+        hasOutput: "output" in toolCall,
+        fullToolCall: toolCall,
+      });
     },
     onError: (error) => {
       console.error("❌ error", error);
@@ -33,6 +52,22 @@
       input = "";
     }
   }
+
+  // Debug: Log messages as they update
+  $effect(() => {
+    if (chat.messages.length > 0) {
+      const lastMessage = chat.messages[chat.messages.length - 1];
+      console.log(
+        "📨 Last message parts:",
+        lastMessage.parts.map((p) => ({
+          type: p.type,
+          state: "state" in p ? p.state : undefined,
+          hasInput: "input" in p,
+          hasOutput: "output" in p,
+        })),
+      );
+    }
+  });
 </script>
 
 <main class="max-w-2xl mx-auto p-4">
@@ -51,102 +86,59 @@
 
         <div class="space-y-2">
           {#each message.parts as part, partIndex (partIndex)}
-            <!-- Text content -->
             {#if part.type === "text"}
-              <div class="text-gray-900">{part.text}</div>
-
-              <!-- Tool Call (when tool is invoked) -->
+              <TextPart text={part.text} />
             {:else if part.type.startsWith("tool-")}
+              {@const toolName = part.type.replace("tool-", "")}
+
               {#if "state" in part}
-                {#if part.state === "input-streaming" || part.state === "input-available"}
-                  <div
-                    class="bg-yellow-100 border border-yellow-300 rounded p-2"
-                  >
-                    <div class="text-xs font-mono text-yellow-800 mb-1">
-                      🔧 TOOL CALL
-                    </div>
-                    <div class="font-semibold text-sm">
-                      {part.type.replace("tool-", "")}
-                    </div>
-                    {#if "input" in part && part.input !== undefined}
-                      <pre class="text-xs mt-1 overflow-x-auto">{JSON.stringify(
-                          part.input,
-                          null,
-                          2,
-                        )}</pre>
-                    {/if}
-                  </div>
-                {:else if part.state === "output-available"}
-                  <div class="bg-green-100 border border-green-300 rounded p-2">
-                    <div class="text-xs font-mono text-green-800 mb-1">
-                      ✅ TOOL RESULT
-                    </div>
-                    <div class="font-semibold text-sm">
-                      {part.type.replace("tool-", "")}
-                    </div>
-                    {#if "output" in part}
-                      <pre class="text-xs mt-1 overflow-x-auto">{JSON.stringify(
-                          part.output,
-                          null,
-                          2,
-                        )}</pre>
-                    {/if}
-                  </div>
-                {:else if part.state === "output-error"}
-                  <div class="bg-red-100 border border-red-300 rounded p-2">
-                    <div class="text-xs font-mono text-red-800 mb-1">
-                      ❌ TOOL ERROR
-                    </div>
-                    <div class="font-semibold text-sm">
-                      {part.type.replace("tool-", "")}
-                    </div>
-                    {#if "errorText" in part && part.errorText}
-                      <div class="text-sm text-red-900">{part.errorText}</div>
-                    {/if}
-                  </div>
-                {:else}
-                  <!-- Other tool states (streaming, done, etc) -->
-                  <div class="bg-gray-100 border border-gray-300 rounded p-2">
-                    <div class="text-xs font-mono mb-1">
-                      🔧 {part.type.replace("tool-", "")}
-                    </div>
-                    <div class="text-xs text-gray-600">State: {part.state}</div>
-                  </div>
+                <!-- Show tool call info when we have input (not yet completed) -->
+                {#if "input" in part && part.input !== undefined && part.state !== "output-available"}
+                  <ToolCallPart
+                    {toolName}
+                    input={part.input}
+                    state={part.state}
+                  />
                 {/if}
-              {/if}
 
-              <!-- Custom Reasoning Data -->
-            {:else if part.type === "data-reasoning"}
-              <div class="bg-purple-100 border border-purple-300 rounded p-2">
-                <div class="text-xs font-mono text-purple-800 mb-1">
-                  🧠 REASONING
-                </div>
-                {#if "data" in part && part.data && typeof part.data === "object"}
-                  {@const data = part.data as Record<string, unknown>}
-                  {#if data.status === "thinking"}
-                    <div class="text-sm">💭 Thinking...</div>
-                  {:else if data.status === "done_thinking"}
-                    <div class="text-sm">✓ Done thinking</div>
-                  {:else if data.status === "calling_tool"}
-                    <div class="text-sm">⚙️ Calling tool: {data.toolName}</div>
-                  {:else if data.status === "tool_complete"}
-                    <div class="text-sm">✓ Tool complete: {data.toolName}</div>
-                  {:else}
-                    <pre class="text-xs">{JSON.stringify(data, null, 2)}</pre>
+                <!-- Show tool result when available -->
+                {#if part.state === "output-available"}
+                  <!-- Show input first -->
+                  {#if "input" in part && part.input !== undefined}
+                    <ToolCalledPart {toolName} input={part.input} />
                   {/if}
-                {/if}
-              </div>
 
-              <!-- Unknown part types (for debugging) -->
+                  <!-- Then show output -->
+                  {#if "output" in part}
+                    <ToolResultPart {toolName} output={part.output} />
+                  {/if}
+                {:else if part.state === "output-error"}
+                  <ToolErrorPart
+                    {toolName}
+                    errorText={"errorText" in part && part.errorText
+                      ? String(part.errorText)
+                      : undefined}
+                  />
+                {:else if part.state === "streaming" || part.state === "done"}
+                  <ToolStatePart {toolName} state={part.state} />
+                {/if}
+              {:else}
+                <!-- No state property - show debug -->
+                <ToolNoStatePart type={part.type} data={part} />
+              {/if}
+            {:else if part.type === "data-reasoning"}
+              {#if "data" in part && part.data && typeof part.data === "object"}
+                {@const data = part.data as Record<string, unknown>}
+                {@const status =
+                  typeof data.status === "string" ? data.status : "unknown"}
+                {@const toolName =
+                  typeof data.toolName === "string" ? data.toolName : undefined}
+
+                <ReasoningPart {status} {toolName} {data} />
+              {/if}
             {:else}
-              <div class="bg-gray-200 border border-gray-400 rounded p-2">
-                <div class="text-xs font-mono mb-1">❓ {part.type}</div>
-                <pre class="text-xs overflow-x-auto">{JSON.stringify(
-                    part,
-                    null,
-                    2,
-                  )}</pre>
-              </div>
+              <!-- Unknown part types (for debugging) -->
+              <UnknownPart type={part.type} data={part} />
             {/if}
           {/each}
         </div>
