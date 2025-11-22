@@ -6,35 +6,33 @@ import os
 async def test_evaluate_process():
     """Test the evaluation pipeline logic."""
     
+    # Import first to avoid breaking tiktoken/dspy imports with global open mock
+    from backend.evaluate import evaluate
+    
     with (
-        patch("backend.evaluate.Evaluate") as MockEvaluator,
-        patch("backend.evaluate.dspy.Example") as _MockExample,
+        patch("backend.evaluate.MachineRAG") as MockMachineRAG,
+        patch("backend.evaluate.HumanRAG") as MockHumanRAG,
+        patch("backend.rag.AgenticRAG") as MockAgenticRAG,
+        patch("os.path.exists") as mock_exists,
+        patch("backend.evaluate.configure_lm") as _mock_configure_lm,
+        # Patch open only for the duration of the test logic
         patch(
             "builtins.open",
             mock_open(
                 read_data='{"question": "q", "answer": "a", "supporting_facts": []}'
             ),
         ) as _mock_file,
-                    patch("backend.evaluate.MachineRAG") as MockMachineRAG,
-                    patch("backend.evaluate.HumanRAG") as MockHumanRAG,
-                    patch("backend.rag.AgenticRAG") as MockAgenticRAG,
-                    patch("os.path.exists") as mock_exists,        patch("backend.evaluate.configure_lm") as _mock_configure_lm,
     ):
         mock_exists.return_value = True
         
-        # Setup Evaluator mock
-        mock_evaluator_instance = MagicMock()
-        MockEvaluator.return_value = mock_evaluator_instance
-        # Return dummy scores
-        mock_evaluator_instance.side_effect = [50.0, 80.0, 75.0] # Human, Machine, Agentic
-        
-        from backend.evaluate import evaluate
+        # Setup RAG mocks to return dummy predictions
+        MockHumanRAG.return_value.return_value = MagicMock(answer="Human", context=[])
+        MockMachineRAG.return_value.return_value = MagicMock(answer="Machine", context=[], search_query="Query")
+        MockAgenticRAG.return_value.return_value = MagicMock(answer="Agentic", history=[])
         
         # Run evaluation
         evaluate(sample_size=2)
         
-        # Verify Evaluator initialized
-        MockEvaluator.assert_called_once()
-        
-        # Verify all 3 pipelines evaluated
-        assert mock_evaluator_instance.call_count == 3
+        # Check if open was called with the analysis file
+        write_calls = [call for call in _mock_file.mock_calls if "evaluation_analysis.json" in str(call)]
+        assert len(write_calls) > 0, "Analysis file was not written"
