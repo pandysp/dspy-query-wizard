@@ -57,18 +57,23 @@ The backend uses a **functional-first approach** with async/await throughout.
 - **`retrieve()`** - Functional interface returning `list[str]` (passages), used by DSPy modules.
 
 **`backend/rag.py`** - DSPy RAG Pipelines:
-- **`HumanRAG`:** Standard Retrieve-then-Answer pipeline using `retrieve()`.
+- **`HumanRAG`:** Standard Retrieve-then-Answer pipeline using `retrieve()`. Supports manual queries.
 - **`MachineRAG`:** Optimized pipeline with Query Rephrasing (`question -> search_query`) and Answering.
-  - **Robustness:** Handles structured LM outputs (dict/list) for `search_query` by sanitizing them to strings, accommodating models like `gpt-4o-mini` that may return JSON despite instructions.
+  - **Robustness:** Handles structured LM outputs (dict/list) for `search_query` by sanitizing them to strings.
+- **`AgenticRAG`:** Sequential pipeline using `dspy.ReAct` to perform multi-step reasoning and retrieval ("Thought -> Action -> Observation").
 
 **`backend/utils/data_preprocess.py`** - HotPotQA dataset download utility:
 - Downloads HotPotQA fullwiki dataset.
 - Saves train/eval/test splits to `backend/data/`.
 
-**`backend/train.py`** - Optimization Script:
+**`backend/train.py`** - Optimization Script (Rephrasing):
 - Loads training data (`backend/data/train.json`).
 - Optimizes `MachineRAG` using `BootstrapFewShot`.
 - Saves compiled program to `backend/data/compiled_machine_rag.json`.
+
+**`backend/train_agentic.py`** - Optimization Script (Agentic):
+- Optimizes `AgenticRAG` using `BootstrapFewShot`.
+- Saves compiled program to `backend/data/compiled_agentic_rag.json`.
 
 ### Key Design Patterns
 
