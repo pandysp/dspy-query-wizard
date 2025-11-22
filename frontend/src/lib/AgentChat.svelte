@@ -26,26 +26,14 @@
       api: "http://127.0.0.1:8000/api/chat",
     }),
     onFinish: (finish) => {
-      console.log("✅ finish", finish);
       isLoading = false;
     },
-    onData: (data) => {
-      console.log("📦 data", data);
-    },
-    onToolCall: ({ toolCall }) => {
-      console.log("🔧 toolCall", {
-        toolCallId: toolCall.toolCallId,
-        state: "state" in toolCall ? toolCall.state : "no-state",
-        hasInput: "input" in toolCall,
-        hasOutput: "output" in toolCall,
-        fullToolCall: toolCall,
-      });
-    },
     onError: (error) => {
-      console.error("❌ error", error);
       isLoading = false;
     },
   });
+
+  const showReasoning = $state(false);
 
   function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
@@ -192,18 +180,42 @@
     }
   };
 
-  const fullMessages = $derived(() => [
-    {
-      role: "system",
-      parts: [
-        {
-          type: "text",
-          text: systemMessagePrompt,
-        },
-      ],
-    },
-    ...fakeMessages,
-  ]);
+  const fullMessages = $derived(() => {
+    const backendMessages = fakeMessages;
+    const messages = [
+      {
+        role: "system",
+        parts: [
+          {
+            type: "text",
+            text: systemMessagePrompt,
+          },
+        ],
+      },
+      ...backendMessages.map((msg) => ({
+        ...msg,
+        parts: msg.parts.filter((part) => {
+          // Always filter out incomplete tool calls as before
+          const isIncompleteToolCall =
+            part.type &&
+            part.type.startsWith?.("tool-") &&
+            "state" in part &&
+            "input" in part &&
+            part.input !== undefined &&
+            part.state !== "output-available";
+
+          // If showReasoning is false, filter out all reasoning parts
+          if (!showReasoning && part.type === "reasoning") {
+            return false;
+          }
+
+          return !isIncompleteToolCall;
+        }),
+      })),
+    ];
+
+    return messages;
+  });
 </script>
 
 <div class="px-2">
@@ -219,9 +231,11 @@
           {message.role}
         </p>
 
-        <div class={cn("space-y-2 mt-2")}>
+        <div
+          class={cn("space-y-2 mt-2", message.role === "system" && "min-h-22")}
+        >
           {#each message.parts as part, partIndex (partIndex)}
-            <div class="rounded text-gray-400 p-1 w-fit pl-2 pr-4">
+            <div class="rounded-sm bg-black text-gray-400 p-1 w-fit pl-2 pr-4">
               {#if part.type === "text"}
                 <TextPart text={part.text} />
               {:else if part.type.startsWith("tool-")}

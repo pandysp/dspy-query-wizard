@@ -491,3 +491,32 @@ async def handle_chat_data(request: Request, protocol: str = Query("data")):
     response.headers["X-Accel-Buffering"] = "no"  # Disable nginx buffering
 
     return response
+
+
+@app.get("/system_messages")
+async def get_system_messages():
+    return {
+        "default": "You are a helpful assistant that can answer questions and help with tasks.",
+        "optimized": "You are a machine god. You are in charge of the universe. You are the only one who can answer questions and help with tasks.",
+    }
+
+
+@app.get("/input_prompts")
+async def get_input_prompts():
+    return [
+        {
+            "id": "1",
+            "prompt": "What is the capital of France?",
+        },
+        {
+            "id": "2",
+            "prompt": "Where was the author of the album '21' born?",
+        },
+        {
+            "id": "3",
+            "prompt": "Why is the sky blue?",
+        },
+    ]
+
+
+uo1

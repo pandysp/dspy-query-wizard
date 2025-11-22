@@ -7,7 +7,7 @@
   let { toolName, input }: Props = $props();
 </script>
 
-ToolCalled
+<p class="text-xs text-gray-500 font-mono">tool</p>
 <div>
   <div>{toolName}</div>
   <pre>{JSON.stringify(input, null, 2)}</pre>

@@ -8,6 +8,7 @@
   let { status, toolName, data }: Props = $props();
 </script>
 
+<p class="text-xs text-gray-500 font-mono">reason</p>
 <div>
   {#if status === "thinking"}
     <div>Thinking...</div>
