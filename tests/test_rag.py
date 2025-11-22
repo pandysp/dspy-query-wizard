@@ -1,8 +1,7 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import dspy  # type: ignore
 # We will now depend on the module importing 'retrieve', so we patch it where it is used.
-import backend.rag
 from backend.rag import HumanRAG, BasicQA, MachineRAG
 
 
@@ -52,16 +51,11 @@ async def test_human_rag_forward():
         mock_retrieve.assert_called_once_with("What is the capital of France?", k=3)
 
 
-@pytest.mark.asyncio
-async def test_machine_rag_forward():
-    """Test the MachineRAG module's forward pass using functional retrieval."""
-    
-    # Mock LM
-    responses = [
-        '{"reasoning": "Break down question.", "search_query": "capital of France"}',
-        '{"reasoning": "Found it.", "answer": "Paris"}'
-    ]
-    
+    @pytest.mark.asyncio
+    async def test_machine_rag_forward():
+        """Test the MachineRAG module's forward pass using functional retrieval."""
+        
+        # Mock LM    
     class SmartMockLM(dspy.LM):
         def __init__(self):
             super().__init__("mock-model")
