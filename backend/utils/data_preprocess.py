@@ -25,12 +25,13 @@ def download_and_save_hotpotqa(output_dir: str | None = None):
 
         logging.info("Downloading HotPotQA dataset (fullwiki)...")
         try:
-            ds = load_dataset("hotpotqa/hotpot_qa", "fullwiki")  # pyright: ignore[reportUnknownVariableType]
+            # datasets library is untyped, returns DatasetDict
+            ds = load_dataset("hotpotqa/hotpot_qa", "fullwiki")  # type: ignore[var-annotated]
         except Exception as e:
             logging.error(f"Primary download failed: {e}")
             logging.info("Attempting fallback: Loading with trust_remote_code=True...")
             try:
-                ds = load_dataset(  # pyright: ignore[reportUnknownVariableType]
+                ds = load_dataset(  # type: ignore[var-annotated]
                     "hotpotqa/hotpot_qa", "fullwiki", trust_remote_code=True
                 )
             except Exception as e2:
@@ -46,14 +47,13 @@ def download_and_save_hotpotqa(output_dir: str | None = None):
         }
 
         for ds_split, file_name in split_mapping.items():
-            if ds_split in ds:  # type: ignore
+            if ds_split in ds:  # type: ignore[operator]
                 file_path = os.path.join(output_dir, f"{file_name}.json")
                 logging.info(f"Saving {ds_split} to {file_path}...")
                 try:
-                    # Saving as json
-                    # Cast to Any to avoid 'to_json' attribute error on Unknown type
-                    split_data = cast(Any, ds[ds_split])  # pyright: ignore[reportExplicitAny]
-                    split_data.to_json(file_path)  # pyright: ignore[reportUnknownMemberType]
+                    # Saving as json - datasets library has to_json method
+                    split_data = cast(Any, ds[ds_split])  # type: ignore[index]
+                    split_data.to_json(file_path)  # type: ignore[attr-defined]
                     logging.info(f"Successfully saved {file_name}.json")
                 except Exception as save_err:
                     logging.error(f"Failed to save {ds_split}: {save_err}")
@@ -61,9 +61,9 @@ def download_and_save_hotpotqa(output_dir: str | None = None):
                     try:
                         with open(file_path, "w", encoding="utf-8") as f:
                             # Cast to Any for iteration
-                            split_data_iter = cast(Any, ds[ds_split])  # pyright: ignore[reportExplicitAny]
-                            for item in split_data_iter:  # pyright: ignore[reportAny]
-                                f.write(json.dumps(item) + "\n")  # pyright: ignore[reportUnusedCallResult, reportAny]
+                            split_data_iter = cast(Any, ds[ds_split])  # type: ignore[index]
+                            for item in split_data_iter:  # type: ignore[var-annotated]
+                                _ = f.write(json.dumps(item) + "\n")
                         logging.info(f"Fallback save successful for {file_name}.json")
                     except Exception as fb_err:
                         logging.error(f"Fallback save failed for {ds_split}: {fb_err}")
