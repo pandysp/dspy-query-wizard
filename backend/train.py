@@ -21,10 +21,18 @@ def configure_lm() -> None:
         logger.warning("OPENAI_API_KEY not found. DSPy optimization will likely fail.")
         return
 
-    # Use gpt-4o-mini as default cost-effective model
-    lm = dspy.LM("openai/gpt-4o-mini", api_key=api_key)
+    model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    # Ensure model name has provider prefix if needed, though dspy.LM usually handles 'openai/'
+    # If user provides 'gpt-5-nano', we prepend 'openai/' if missing for clarity, 
+    # but dspy/litellm might need it.
+    if not model_name.startswith("openai/"):
+        full_model_name = f"openai/{model_name}"
+    else:
+        full_model_name = model_name
+
+    lm = dspy.LM(full_model_name, api_key=api_key)
     dspy.settings.configure(lm=lm)
-    logger.info("LM configured: openai/gpt-4o-mini")
+    logger.info(f"LM configured: {full_model_name}")
 
 
 def train(sample_size: int = 20) -> None:

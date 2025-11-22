@@ -30,10 +30,15 @@ def configure_lm() -> None:
         logger.warning("OPENAI_API_KEY not found. Machine RAG will fail.")
         return
 
-    # Use gpt-4o-mini as default
-    lm = dspy.LM("openai/gpt-4o-mini", api_key=api_key)
+    model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    if not model_name.startswith("openai/"):
+        full_model_name = f"openai/{model_name}"
+    else:
+        full_model_name = model_name
+
+    lm = dspy.LM(full_model_name, api_key=api_key)
     dspy.settings.configure(lm=lm)
-    logger.info("LM configured: openai/gpt-4o-mini")
+    logger.info(f"LM configured: {full_model_name}")
 
 
 @asynccontextmanager
