@@ -44,6 +44,43 @@ async def test_human_rag_forward():
         
         mock_retrieve.assert_called_once_with("What is the capital of France?", k=3)
 
+@pytest.mark.asyncio
+async def test_human_rag_manual_queries():
+    """Test HumanRAG with manually provided search queries."""
+    
+    class MockLM(dspy.LM):
+        def __init__(self, responses):
+            super().__init__("mock-model")
+            self.responses = responses
+            self.history = []
+        def __call__(self, prompt=None, messages=None, **kwargs):
+            return self.responses
+
+    mock_lm = MockLM(['{"reasoning": "Combined info.", "answer": "Paris"}'])
+    
+    with patch("backend.rag.retrieve") as mock_retrieve:
+        # Mock returning different contexts for different queries
+        def side_effect(query, k=3):
+            if "query1" in query:
+                return ["Context 1"]
+            if "query2" in query:
+                return ["Context 2"]
+            return []
+        mock_retrieve.side_effect = side_effect
+        
+        rag = HumanRAG()
+        
+        with dspy.context(lm=mock_lm):
+            # Pass manual queries
+            result = rag("Complex Question", queries=["query1", "query2"])
+        
+        assert result.answer == "Paris"
+        # Should contain both contexts
+        assert "Context 1" in result.context
+        assert "Context 2" in result.context
+        
+        assert mock_retrieve.call_count == 2
+
 
 @pytest.mark.asyncio
 async def test_machine_rag_forward():

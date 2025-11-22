@@ -80,6 +80,7 @@ app = FastAPI(lifespan=lifespan)
 
 class QueryRequest(BaseModel):
     question: str
+    manual_queries: list[str] | None = None
 
 
 @app.get("/")
@@ -99,8 +100,8 @@ async def query(request: QueryRequest):
         # Run pipelines
         # TODO: Run in parallel for performance
         
-        # Human RAG
-        human_pred = human_rag(request.question)
+        # Human RAG (simulated human effort if manual_queries provided)
+        human_pred = human_rag(request.question, queries=request.manual_queries)
         
         # Machine RAG
         machine_pred = machine_rag(request.question)

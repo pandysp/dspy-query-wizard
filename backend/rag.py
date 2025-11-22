@@ -21,9 +21,16 @@ class HumanRAG(dspy.Module):  # type: ignore[misc]
         super().__init__()
         self.generate_answer = dspy.ChainOfThought(BasicQA)  # type: ignore
 
-    def forward(self, question: str) -> dspy.Prediction:  # type: ignore[misc]
+    def forward(self, question: str, queries: list[str] | None = None) -> dspy.Prediction:  # type: ignore[misc]
         # Use functional retrieval (returns list[str])
-        context = retrieve(question, k=3)
+        context = []
+        if queries:
+            # Manual multi-query (Human simulated effort)
+            for q in queries:
+                context.extend(retrieve(q, k=3))
+        else:
+            # Simple single query
+            context = retrieve(question, k=3)
         
         prediction = self.generate_answer(context=context, question=question)
         return dspy.Prediction(context=context, answer=str(prediction.answer))  # type: ignore

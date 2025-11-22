@@ -44,7 +44,14 @@ def test_query_endpoint(mock_rag_modules):
     MockHuman, MockMachine, MockAgentic = mock_rag_modules
     
     with TestClient(app) as client:
-        response = client.post("/api/query", json={"question": "Test Question"})
+        # Test with manual queries
+        response = client.post(
+            "/api/query", 
+            json={
+                "question": "Test Question",
+                "manual_queries": ["query1", "query2"]
+            }
+        )
         
         assert response.status_code == 200
         data = response.json()
@@ -57,6 +64,7 @@ def test_query_endpoint(mock_rag_modules):
         assert data["agentic_answer"]["answer"] == "Agentic Answer"
         
         # Verify calls
-        MockHuman.return_value.assert_called_with("Test Question")
+        # HumanRAG should receive the manual queries
+        MockHuman.return_value.assert_called_with("Test Question", queries=["query1", "query2"])
         MockMachine.return_value.assert_called_with("Test Question")
         MockAgentic.return_value.assert_called_with("Test Question")
