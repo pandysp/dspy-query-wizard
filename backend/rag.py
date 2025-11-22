@@ -22,7 +22,7 @@ class HumanRAG(dspy.Module):  # type: ignore[misc]
         self.generate_answer = dspy.ChainOfThought(BasicQA)  # type: ignore
 
     def forward(self, question: str) -> dspy.Prediction:  # type: ignore[misc]
-        # Use functional retrieval
+        # Use functional retrieval (returns list[str])
         context = retrieve(question, k=3)
         
         prediction = self.generate_answer(context=context, question=question)
@@ -50,9 +50,19 @@ class MachineRAG(dspy.Module):  # type: ignore[misc]
     def forward(self, question: str) -> dspy.Prediction:  # type: ignore[misc]
         # 1. Rephrase
         rephrased = self.rephrase(question=question)
-        search_query = cast(str, rephrased.search_query)
+        raw_query = rephrased.search_query
+        
+        # Robustly handle potential non-string outputs from LM (e.g. JSON objects/lists)
+        if isinstance(raw_query, dict):
+            # Join values or take first value
+            search_query = " ".join(str(v) for v in raw_query.values())
+        elif isinstance(raw_query, list):
+            search_query = " ".join(str(x) for x in raw_query)
+        else:
+            search_query = str(raw_query)
 
         # 2. Retrieve (functional)
+        # Returns list[str] directly
         context = retrieve(search_query, k=3)
 
         # 3. Answer
