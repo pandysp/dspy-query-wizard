@@ -47,7 +47,9 @@ The backend uses a **functional-first approach** with async/await throughout.
 - Currently returns placeholder responses for human/machine answers.
 
 **`backend/retriever.py`** - Core retrieval logic with resilient fallback:
-- **Primary:** ColBERTv2 server (`http://20.102.90.50:2017/wiki17_abstracts`).
+- **Primary:** Local ColBERT server (`http://127.0.0.1:2017/api/search`) using [nielsgl/colbert-server](https://github.com/nielsgl/colbert-server).
+  - Start with: `just colbert-start` (downloads ~13GB Wikipedia 2017 index on first run, then cached)
+  - See `COLBERT_SETUP.md` for details
 - **Fallback:** Wikipedia OpenSearch API (ensures system works even if ColBERT is down).
 - **Caching:** Uses `joblib.Memory` for file-based caching (`.cache/` directory).
 - **`fetch_colbert_results()`** - Async entrypoint wrapping cached sync retrieval.
@@ -91,6 +93,12 @@ Tests use `pytest` with `pytest-asyncio` for async support. Tests mock httpx.Cli
 ```bash
 # Install dependencies
 just install
+
+# Start ColBERT retrieval server (required - see COLBERT_SETUP.md)
+just colbert-start       # Downloads ~13GB on first run, then cached
+just colbert-status      # Check if server is running
+just colbert-stop        # Stop the server
+just colbert-logs        # View server logs
 
 # Run the FastAPI server (auto-reload enabled)
 just run

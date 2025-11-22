@@ -18,7 +18,9 @@ class RetrievalResult(TypedDict):
 
 
 # --- Configuration ---
-COLBERT_URL = "http://20.102.90.50:2017/wiki17_abstracts"
+# Local ColBERT server (https://github.com/nielsgl/colbert-server)
+# Start with: uvx colbert-server serve --from-cache --port 2017
+COLBERT_URL = "http://127.0.0.1:2017/api/search"
 WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
 USER_AGENT = "DSPy-Query-Wizard/1.0 (https://github.com/yourusername/dspy-query-wizard; contact@example.com)"
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "../.cache")
