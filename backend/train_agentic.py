@@ -22,8 +22,8 @@ def configure_lm() -> None:
         logger.warning("OPENAI_API_KEY not found. DSPy optimization will likely fail.")
         return
 
-    # Default to gpt-5-nano as requested
-    model_name = os.getenv("OPENAI_MODEL", "gpt-5-nano")
+    # Default to gpt-5-mini as requested
+    model_name = os.getenv("OPENAI_MODEL", "gpt-5-mini")
     if not model_name.startswith("openai/"):
         full_model_name = f"openai/{model_name}"
     else:

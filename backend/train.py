@@ -22,9 +22,9 @@ def configure_lm() -> None:
         logger.warning("OPENAI_API_KEY not found. DSPy optimization will likely fail.")
         return
 
-    model_name = os.getenv("OPENAI_MODEL", "gpt-5-nano")
+    model_name = os.getenv("OPENAI_MODEL", "gpt-5-mini")
     # Ensure model name has provider prefix if needed, though dspy.LM usually handles 'openai/'
-    # If user provides 'gpt-5-nano', we prepend 'openai/' if missing for clarity, 
+    # If user provides 'gpt-5-mini', we prepend 'openai/' if missing for clarity, 
     # but dspy/litellm might need it.
     if not model_name.startswith("openai/"):
         full_model_name = f"openai/{model_name}"
