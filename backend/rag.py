@@ -1,5 +1,6 @@
 import dspy  # type: ignore
 from typing import Any, cast
+from backend.retriever import retrieve
 
 
 class BasicQA(dspy.Signature):  # type: ignore[misc]
@@ -16,18 +17,14 @@ class HumanRAG(dspy.Module):  # type: ignore[misc]
     Retrieves context then answers the question.
     """
 
-    def __init__(self, retriever: dspy.Module | None = None) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        # If no retriever provided, use the global one (dspy.Retrieve)
-        # We pass k=3 to match our plan constraints
-        self.retrieve = retriever if retriever else dspy.Retrieve(k=3)  # type: ignore
         self.generate_answer = dspy.ChainOfThought(BasicQA)  # type: ignore
 
     def forward(self, question: str) -> dspy.Prediction:  # type: ignore[misc]
-        # Retrieve returns a Prediction which we access passages from
-        retrieved: Any = self.retrieve(question)
-        context = cast(list[str], retrieved.passages)
-
+        # Use functional retrieval
+        context = retrieve(question, k=3)
+        
         prediction = self.generate_answer(context=context, question=question)
         return dspy.Prediction(context=context, answer=prediction.answer)  # type: ignore
 
@@ -45,9 +42,8 @@ class MachineRAG(dspy.Module):  # type: ignore[misc]
     Rephrases the question into a search query, retrieves, then answers.
     """
 
-    def __init__(self, retriever: dspy.Module | None = None) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.retrieve = retriever if retriever else dspy.Retrieve(k=3)  # type: ignore
         self.rephrase = dspy.ChainOfThought(GenerateSearchQuery)  # type: ignore
         self.generate_answer = dspy.ChainOfThought(BasicQA)  # type: ignore
 
@@ -56,9 +52,8 @@ class MachineRAG(dspy.Module):  # type: ignore[misc]
         rephrased = self.rephrase(question=question)
         search_query = cast(str, rephrased.search_query)
 
-        # 2. Retrieve (using rephrased query)
-        retrieved: Any = self.retrieve(search_query)
-        context = cast(list[str], retrieved.passages)
+        # 2. Retrieve (functional)
+        context = retrieve(search_query, k=3)
 
         # 3. Answer
         prediction = self.generate_answer(context=context, question=question)

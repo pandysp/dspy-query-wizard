@@ -1,7 +1,5 @@
 import httpx
-import dspy  # type: ignore
-from dspy.dsp.utils import dotdict  # type: ignore
-from typing import Any, NotRequired, TypedDict, override
+from typing import Any, NotRequired, TypedDict
 from joblib import Memory  # type: ignore
 import os
 import asyncio
@@ -9,6 +7,7 @@ import logging
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
 
 # Type definitions for API responses
 class RetrievalResult(TypedDict):
@@ -123,6 +122,15 @@ def _cached_retrieval_sync(query: str, k: int) -> list[RetrievalResult]:
             return [RetrievalResult(text="Failed to retrieve", pid=-1, score=0.0)]
 
 
+def retrieve(query: str, k: int = 3) -> list[str]:
+    """
+    Simplified functional interface for DSPy modules.
+    Returns a list of strings (passages) directly.
+    """
+    results = _cached_retrieval_sync(query, k)
+    return [r["text"] for r in results]
+
+
 async def fetch_colbert_results(query: str, k: int = 5) -> list[RetrievalResult]:
     """
     Primary Retriever Entrypoint (Async).
@@ -142,47 +150,3 @@ async def prewarm_cache() -> None:
     tasks = [fetch_colbert_results(q, k=3) for q in PREWARM_QUESTIONS]
     _ = await asyncio.gather(*tasks)
     logger.info("Cache Pre-warming complete.")
-
-
-class ColBERTv2RM(dspy.Retrieve):  # type: ignore[misc]
-    """
-    DSPy-compatible wrapper for the optimizer loop (Synchronous).
-    """
-
-    def __init__(self, k: int = 3) -> None:
-        super().__init__(k=k)  # type: ignore[misc]
-
-    @override
-    def forward(
-        self,
-        query: str | list[str],
-        k: int | None = None,
-        **kwargs: Any,  # DSPy base class accepts arbitrary kwargs
-    ) -> dspy.Prediction:  # type: ignore[misc]
-        k = k if k is not None else self.k
-        # Handle single string vs list of strings
-        queries = [query] if isinstance(query, str) else query
-
-        passages = []
-        for q in queries:
-            results = _cached_retrieval_sync(q, k)
-            for r in results:
-                # DSPy expects dotdict with long_text, pid, score
-                passages.append(
-                    dotdict(
-                        {
-                            "long_text": r.get("text", ""),
-                            "pid": r.get("pid"),
-                            "score": r.get("score", 0),
-                        }
-                    )
-                )
-
-        # DSPy's Prediction is a wrapper around the passages list
-        return dspy.Prediction(passages=passages)  # type: ignore[misc]
-
-
-def configure_retriever() -> None:
-    """Configures the global DSPy retriever."""
-    rm = ColBERTv2RM()
-    dspy.settings.configure(rm=rm)  # type: ignore[misc]

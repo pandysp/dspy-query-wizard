@@ -1,6 +1,8 @@
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import dspy  # type: ignore
+# We will now depend on the module importing 'retrieve', so we patch it where it is used.
+import backend.rag
 from backend.rag import HumanRAG, BasicQA, MachineRAG
 
 
@@ -15,9 +17,9 @@ async def test_human_rag_signature():
 
 @pytest.mark.asyncio
 async def test_human_rag_forward():
-    """Test the HumanRAG module's forward pass."""
+    """Test the HumanRAG module's forward pass using functional retrieval."""
     
-    # Define a MockLM that inherits from dspy.LM to satisfy type checks
+    # Define a MockLM
     class MockLM(dspy.LM):
         def __init__(self, responses):
             super().__init__("mock-model")
@@ -25,81 +27,75 @@ async def test_human_rag_forward():
             self.history = []
 
         def __call__(self, prompt=None, messages=None, **kwargs):
-            # dspy.LM expects to return a list of strings (completions)
             return self.responses
 
-    # 1. Setup Mocks
-    
-    # Mock Retriever
-    mock_retriever = MagicMock()
-    mock_retriever.return_value = dspy.Prediction(passages=["Paris is the capital of France."])
-    
     # Mock LM
     mock_lm = MockLM(['{"reasoning": "Because it is.", "answer": "Paris"}'])
     
-    # 2. Initialize Module
-    rag = HumanRAG(retriever=mock_retriever)
-    
-    # 3. Execute with Context
-    with dspy.context(lm=mock_lm):
-        result = rag("What is the capital of France?")
-    
-    # 4. Assert
-    assert result.answer == "Paris"
-    assert result.context == ["Paris is the capital of France."]
-    
-    # Verify retriever was called
-    mock_retriever.assert_called_once()
+    # Mock the functional 'retrieve' imported in backend.rag
+    # We assume backend.rag imports 'retrieve' from backend.retriever
+    with patch("backend.rag.retrieve") as mock_retrieve:
+        mock_retrieve.return_value = ["Paris is the capital of France."]
+        
+        # 2. Initialize Module (No retriever arg needed anymore)
+        rag = HumanRAG()
+        
+        # 3. Execute with Context
+        with dspy.context(lm=mock_lm):
+            result = rag("What is the capital of France?")
+        
+        # 4. Assert
+        assert result.answer == "Paris"
+        assert result.context == ["Paris is the capital of France."]
+        
+        # Verify functional retriever was called
+        mock_retrieve.assert_called_once_with("What is the capital of France?", k=3)
 
 
 @pytest.mark.asyncio
 async def test_machine_rag_forward():
-    """Test the MachineRAG module's forward pass."""
+    """Test the MachineRAG module's forward pass using functional retrieval."""
     
-    # 1. Setup Mocks
-    mock_retriever = MagicMock()
-    mock_retriever.return_value = dspy.Prediction(passages=["Paris is the capital of France."])
+    # Mock LM
+    responses = [
+        '{"reasoning": "Break down question.", "search_query": "capital of France"}',
+        '{"reasoning": "Found it.", "answer": "Paris"}'
+    ]
     
-    # Mock LM that responds based on the prompt instruction
     class SmartMockLM(dspy.LM):
         def __init__(self):
             super().__init__("mock-model")
             self.history = []
 
         def __call__(self, prompt=None, messages=None, **kwargs):
-            # Determine which step we are in based on the prompt instructions
-            # DSPy prompts usually include the signature instructions.
-            
-            # Ensure prompt is a string
             p_text = prompt if prompt else ""
             if messages:
-                # Chat model usage, check messages
                 for m in messages:
                     p_text += str(m)
             
-            # Check keywords from docstrings
-            if "Write a simple search query" in p_text:
+            if "simple search query" in p_text or "Search Query" in p_text:
                 return ['{"reasoning": "Break down question.", "search_query": "capital of France"}']
-            elif "Answer questions" in p_text:
+            elif "Answer questions" in p_text or "Answer:" in p_text:
                 return ['{"reasoning": "Found it.", "answer": "Paris"}']
-            else:
-                # Fallback or error
-                print(f"DEBUG: UNKNOWN PROMPT: {p_text[:100]}...")
-                return ['{"reasoning": "Unknown", "answer": "Error"}']
+            
+            return ['{"answer": "Error"}']
 
     mock_lm = SmartMockLM()
     
-    # 2. Initialize Module
-    rag = MachineRAG(retriever=mock_retriever)
-    
-    # 3. Execute with Context
-    with dspy.context(lm=mock_lm):
-        result = rag("What is the capital of France?")
-    
-    # 4. Assert
-    assert result.answer == "Paris"
-    assert result.search_query == "capital of France"
-    assert result.context == ["Paris is the capital of France."]
-    
-    # Verify retriever was called with the REPHRASED query
-    mock_retriever.assert_called_with("capital of France")
+    with patch("backend.rag.retrieve") as mock_retrieve:
+        mock_retrieve.return_value = ["Paris is the capital of France."]
+        
+        # 2. Initialize Module
+        rag = MachineRAG()
+        
+        # 3. Execute with Context
+        with dspy.context(lm=mock_lm):
+            result = rag("What is the capital of France?")
+        
+        # 4. Assert
+        assert result.answer == "Paris"
+        assert result.search_query == "capital of France"
+        assert result.context == ["Paris is the capital of France."]
+        
+        # Verify retriever was called with the REPHRASED query
+        mock_retrieve.assert_called_with("capital of France", k=3)
