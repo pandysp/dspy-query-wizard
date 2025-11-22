@@ -48,7 +48,7 @@ async def lifespan(_: FastAPI):
 
     # Startup
     configure_lm()
-    
+
     logger.info("Initializing RAG pipelines...")
     human_rag = HumanRAG()
     machine_rag = MachineRAG()
@@ -99,13 +99,13 @@ async def query(request: QueryRequest):
     try:
         # Run pipelines
         # TODO: Run in parallel for performance
-        
+
         # Human RAG (simulated human effort if manual_queries provided)
         human_pred = human_rag(request.question, queries=request.manual_queries)
-        
+
         # Machine RAG
         machine_pred = machine_rag(request.question)
-        
+
         # Agentic RAG (The "Smart" approach)
         agentic_pred = agentic_rag(request.question)
 
@@ -125,8 +125,10 @@ async def query(request: QueryRequest):
         },
         "agentic_answer": {
             "answer": agentic_pred.answer,
-            "context": getattr(agentic_pred, "history", []), # ReAct history contains steps
-        }
+            "context": getattr(
+                agentic_pred, "history", []
+            ),  # ReAct history contains steps
+        },
     }
 
 
