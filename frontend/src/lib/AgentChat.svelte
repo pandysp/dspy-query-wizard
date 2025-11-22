@@ -18,6 +18,8 @@
   import { inputPrompts, selectedInputPrompt } from "./configStore.svelte";
 
   let isLoading = $state(false);
+  let evaluation = $state<number | null>(null);
+  const EVALUATE_TOOL = "evaluate";
 
   const {
     systemMessagePrompt,
@@ -111,6 +113,27 @@
     return messages;
   });
 
+  $effect(() => {
+    // Find first tool result for EVALUATE_TOOL
+    for (const message of fullMessages()) {
+      for (const part of message.parts) {
+        if (
+          part.type === `tool-${EVALUATE_TOOL}` &&
+          "state" in part &&
+          part.state === "output-available" &&
+          "output" in part
+        ) {
+          if (typeof part.output === "number") {
+            evaluation = part.output;
+          } else {
+            evaluation = parseFloat(part.output as string);
+          }
+          return;
+        }
+      }
+    }
+  });
+
   // Start loading
   const inputPrompt = inputPrompts.prompts.find(
     (p) => p.id === selectedInputPrompt.id,
@@ -123,6 +146,12 @@
 
 <div class="px-2">
   <div class="space-y-4 mb-4">
+    {#if evaluation !== null}
+      <div class="text-center text-gray-500 py-4">
+        <div class="text-sm">Evaluation:</div>
+        <div class="text-xl">{evaluation * 100}%</div>
+      </div>
+    {/if}
     {#each fullMessages() as message, messageIndex (messageIndex)}
       <div>
         <p
