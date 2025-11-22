@@ -129,14 +129,23 @@ class AgenticRAG(dspy.Module):  # type: ignore[misc]
         # ReAct stores trace in 'trajectory'
         history = getattr(prediction, "trajectory", [])
         
-        for step in history:
-            # step is usually a string in ReAct history
-            if isinstance(step, str) and step.startswith("Observation:"):
-                # Extract content after "Observation:"
-                content = step.replace("Observation:", "", 1).strip()
-                # If content looks like a list string "['...']", try to clean it up slightly
-                # but keeping raw content is safer than fragile parsing.
-                context.append(content)
+        # Handle dictionary trajectory (newer DSPy versions)
+        if isinstance(history, dict):
+            for key, value in history.items():
+                if key.startswith("observation_"):
+                    # value is typically a list of strings (retrieved passages)
+                    if isinstance(value, list):
+                        context.extend(str(v) for v in value)
+                    else:
+                        context.append(str(value))
+        # Handle list trajectory (older DSPy versions or different config)
+        elif isinstance(history, list):
+            for step in history:
+                # step is usually a string in ReAct history
+                if isinstance(step, str) and step.startswith("Observation:"):
+                    # Extract content after "Observation:"
+                    content = step.replace("Observation:", "", 1).strip()
+                    context.append(content)
         
         return dspy.Prediction(
             answer=str(prediction.answer),

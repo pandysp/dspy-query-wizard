@@ -1,5 +1,4 @@
 import dspy  # type: ignore
-# Resolved merge conflicts
 import os
 import json
 import logging
@@ -60,9 +59,18 @@ def evaluate(sample_size: int = 10) -> None:
                 raw_data = [json.loads(line) for line in f]
 
         for item in raw_data[:sample_size]:
+            # Convert supporting_facts from columnar to row format
+            supporting_facts = []
+            raw_facts = item.get("supporting_facts", {})
+            if raw_facts and "title" in raw_facts and "sent_id" in raw_facts:
+                titles = raw_facts["title"]
+                sent_ids = raw_facts["sent_id"]
+                supporting_facts = list(zip(titles, sent_ids))
+
             example = dspy.Example(
                 question=item["question"],
-                answer=item["answer"]
+                answer=item["answer"],
+                supporting_facts=supporting_facts
             ).with_inputs("question")
             devset.append(example)
             
@@ -110,6 +118,9 @@ def evaluate(sample_size: int = 10) -> None:
     logger.info("\n--- Inspecting MachineRAG ---")
     inspector(machine_rag)
 
+    logger.info("\n--- Inspecting AgenticRAG ---")
+    inspector(agentic_rag)
+
     # --- Accuracy Phase ---
     logger.info("\n" + "="*30)
     logger.info("ACCURACY PHASE (Exact Match)")
@@ -148,9 +159,16 @@ def evaluate(sample_size: int = 10) -> None:
     logger.info("="*30)
     logger.info(f"{'Model':<15} | {'Accuracy':<10} | {'Recall@20':<10}")
     logger.info("-" * 41)
-    logger.info(f"{'HumanRAG':<15} | {human_em:<10.2f} | {human_recall:<10.2f}")
-    logger.info(f"{'MachineRAG':<15} | {machine_em:<10.2f} | {machine_recall:<10.2f}")
-    logger.info(f"{'AgenticRAG':<15} | {agentic_em:<10.2f} | {agentic_recall:<10.2f}")
+    
+    def get_score(res):
+        # Handle dspy.EvaluationResult object if present
+        if hasattr(res, "score"):
+            return res.score
+        return res
+
+    logger.info(f"{'HumanRAG':<15} | {get_score(human_em):<10.2f} | {get_score(human_recall):<10.2f}")
+    logger.info(f"{'MachineRAG':<15} | {get_score(machine_em):<10.2f} | {get_score(machine_recall):<10.2f}")
+    logger.info(f"{'AgenticRAG':<15} | {get_score(agentic_em):<10.2f} | {get_score(agentic_recall):<10.2f}")
     logger.info("="*30)
 
 if __name__ == "__main__":

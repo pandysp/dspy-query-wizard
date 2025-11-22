@@ -108,7 +108,7 @@ def combined_metric(example: dspy.Example, pred: dspy.Prediction, trace=None) ->
 def metric_log_retrieval(example: dspy.Example, pred: dspy.Prediction, trace=None) -> float:
     """
     Logs the top 5 retrieved snippets for inspection.
-    Returns 0.0 (dummy value).
+    Returns Recall@20 so the metric isn't 0.0.
     """
     print(f"\nQuestion: {example.question}")
     print(f"Gold Answer: {example.answer}")
@@ -118,7 +118,9 @@ def metric_log_retrieval(example: dspy.Example, pred: dspy.Prediction, trace=Non
         # Truncate for display
         snippet = ctx[:200] + "..." if len(ctx) > 200 else ctx
         print(f"  [{i+1}] {snippet}")
-    return 0.0
+    
+    # Return a useful metric instead of 0.0
+    return metric_recall_at_20(example, pred, trace)
 
 
 def answer_in_context(example, pred, trace=None):
