@@ -1,3 +1,4 @@
+from fastapi.applications import FastAPI
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -40,21 +41,20 @@ def configure_lm() -> None:
 
     openai_client = AsyncOpenAI(api_key=api_key)
 
-    model_name = os.getenv("OPENAI_MODEL", "gpt-5-nano")
+    model_name = os.getenv("OPENAI_MODEL", "gpt-5-mini")
     if not model_name.startswith("openai/"):
         full_model_name = f"openai/{model_name}"
     else:
         full_model_name = model_name
 
-    # Use Responses API as requested
+    # Use Chat API for better streaming support
     lm = dspy.LM(
         full_model_name, 
         api_key=api_key,
-        model_type="responses",
-        # extra_body={"reasoning": {"summary": "auto"}} # Commented out as it causes BadRequestError
+        model_type="chat",
     )
     dspy.settings.configure(lm=lm)
-    logger.info(f"LM configured: {full_model_name} (Responses API)")
+    logger.info(f"LM configured: {full_model_name} (Chat API)")
 
 
 @asynccontextmanager
@@ -103,7 +103,7 @@ async def lifespan(_: FastAPI):
     # Shutdown (optional cleanup)
 
 
-app = FastAPI(lifespan=lifespan)
+app: FastAPI = FastAPI(lifespan=lifespan)
 
 
 class QueryRequest(BaseModel):
@@ -178,68 +178,135 @@ class ChatRequestPayload(BaseModel):
 class VercelStatusMessageProvider(StatusMessageProvider):
     """
     Maps DSPy status updates to Vercel AI SDK streaming protocol.
-    We use Vercel's 'Data' protocol (2:) for status messages to avoid breaking text stream.
+    We return 'raw' JSON objects that stream_dspy_generator will then format into SSE.
     """
     def tool_start_status_message(self, instance, inputs):
-        msg = f"Running tool: {instance.name} with {inputs}"
-        # Send as a data part (2:) containing a JSON log
-        return json.dumps({"type": "tool_start", "message": msg})
+        # Return raw data; stream_dspy_generator will add toolCallId and format to SSE.
+        return json.dumps({
+            "type": "tool-input-start-raw",
+            "toolName": instance.name,
+            "inputs": inputs,
+        })
 
     def tool_end_status_message(self, outputs):
-        msg = f"Tool finished. Result: {str(outputs)[:100]}..." # Truncate for brevity
-        return json.dumps({"type": "tool_end", "message": msg})
+        return json.dumps({
+            "type": "tool-output-available-raw",
+            "outputs": outputs,
+        })
 
 
 async def stream_dspy_generator(stream_gen):
-    """Helper to iterate DSPy async generator and yield Vercel formatted chunks."""
+    """Helper to iterate DSPy async generator and yield Vercel formatted SSE chunks."""
     import uuid
     import traceback
+    
+    message_id = f"msg_{uuid.uuid4().hex}"
+    text_id = f"text_{uuid.uuid4().hex}" # For the main answer text block
+    
     reasoning_id = None
+    current_tool_call_id = None
+    
+    # Send initial message start part
+    yield f'data: {json.dumps({"type": "start", "messageId": message_id})}\n'
     
     try:
+        # Send text-start for the main text block
+        yield f'data: {json.dumps({"type": "text-start", "id": text_id})}\n'
+
         async for chunk in stream_gen:
+            logger.info(f"DEBUG: Raw chunk type from dspy.streamify: {type(chunk)}")
+            
             if isinstance(chunk, StreamResponse):
-                # Check if this is a reasoning field
+                # Reasoning Part (next_thought, rationale, reasoning)
                 if chunk.signature_field_name in ["reasoning", "next_thought", "rationale"]:
+                    # Close current text block if active
                     if reasoning_id is None:
                         reasoning_id = f"reasoning_{uuid.uuid4().hex[:8]}"
-                        # Reasoning Start
-                        yield f'2:[{{"type": "reasoning-start", "id": "{reasoning_id}"}}]\n'
+                        yield f'data: {json.dumps({"type": "reasoning-start", "id": reasoning_id})}\n'
                     
-                    # Reasoning Delta
                     if chunk.chunk:
-                        yield f'2:[{{"type": "reasoning-delta", "id": "{reasoning_id}", "delta": {json.dumps(chunk.chunk)}}}]\n'
+                        yield f'data: {json.dumps({"type": "reasoning-delta", "id": reasoning_id, "delta": chunk.chunk})}\n'
+                
+                # Standard Text output (answer field)
                 else:
-                    # If we were reasoning, close it before sending text
+                    # Close reasoning if active before emitting text
                     if reasoning_id:
-                        yield f'2:[{{"type": "reasoning-end", "id": "{reasoning_id}"}}]\n'
+                        yield f'data: {json.dumps({"type": "reasoning-end", "id": reasoning_id})}\n'
                         reasoning_id = None
                     
-                    # Standard Text output -> Vercel Text Part (0:)
                     if chunk.chunk:
-                         yield f'0:{json.dumps(chunk.chunk)}\n'
+                         yield f'data: {json.dumps({"type": "text-delta", "id": text_id, "delta": chunk.chunk})}\n'
             
             elif isinstance(chunk, StatusMessage):
-                # If we were reasoning, close it before sending status
+                # Close reasoning if active before emitting status
                 if reasoning_id:
-                    yield f'2:[{{"type": "reasoning-end", "id": "{reasoning_id}"}}]\n'
+                    yield f'data: {json.dumps({"type": "reasoning-end", "id": reasoning_id})}\n'
                     reasoning_id = None
-
-                # Status output -> Vercel Data Part (2:)
+                
+                # Parse raw status data and map to Vercel Tool events
                 try:
-                    data_content = json.loads(chunk.message)
-                    yield f'2:[{json.dumps(data_content)}]\n'
-                except json.JSONDecodeError:
-                    yield f'2:[{{"type": "status", "message": "{chunk.message}"}}]\n'
+                    status_data = json.loads(chunk.message)
+                    status_type = status_data.get("type")
                     
-        # Final cleanup
-        if reasoning_id:
-            yield f'2:[{{"type": "reasoning-end", "id": "{reasoning_id}"}}]\n'
+                    if status_type == "tool-input-start-raw":
+                        current_tool_call_id = f"call_{uuid.uuid4().hex}"
+                        yield f'data: {json.dumps({
+                            "type": "tool-input-start",
+                            "toolCallId": current_tool_call_id,
+                            "toolName": status_data["toolName"]
+                        })}\n'
+                        yield f'data: {json.dumps({
+                            "type": "tool-input-available",
+                            "toolCallId": current_tool_call_id,
+                            "toolName": status_data["toolName"],
+                            "input": status_data["inputs"] # Pass original inputs
+                        })}\n'
+                        
+                    elif status_type == "tool-output-available-raw":
+                        if current_tool_call_id:
+                            yield f'data: {json.dumps({
+                                "type": "tool-output-available",
+                                "toolCallId": current_tool_call_id,
+                                "output": status_data["outputs"]
+                            })}\n'
+                        current_tool_call_id = None # Reset for next tool call
+                        
+                    else: # Fallback for other custom status messages as generic data
+                        yield f'data: {json.dumps({"type": "data", "data": {"type": "status", "message": chunk.message}})}\n'
+                        
+                except json.JSONDecodeError:
+                    yield f'data: {json.dumps({"type": "data", "data": {"type": "status", "message": chunk.message}})}\n'
             
+            # Fallback: Handle final Prediction object if streaming didn't capture tokens
+            elif isinstance(chunk, dspy.primitives.prediction.Prediction):
+                logger.info("Received final Prediction object (fallback).")
+                # Close reasoning if active
+                if reasoning_id:
+                    yield f'data: {json.dumps({"type": "reasoning-end", "id": reasoning_id})}\n'
+                    reasoning_id = None
+                
+                # Emit delta for the answer from fallback, then end the text block
+                if chunk.answer:
+                    yield f'data: {json.dumps({"type": "text-delta", "id": text_id, "delta": chunk.answer})}\n'
+            
+        # Final cleanup and termination messages
+        if reasoning_id:
+            yield f'data: {json.dumps({"type": "reasoning-end", "id": reasoning_id})}\n'
+            
+        # Ensure the main text block is ended
+        yield f'data: {json.dumps({"type": "text-end", "id": text_id})}\n'
+        
+        # Finish message
+        yield f'data: {json.dumps({"type": "finish"})}\n'
+        
     except Exception as e:
         logger.error(f"Streaming error: {e}")
         traceback.print_exc()
-        yield f'0:Error: {str(e)}\nDetails: {traceback.format_exc()}\n'
+        yield f'data: {json.dumps({"type": "error", "errorText": f"Streaming error: {str(e)}"})}\n'
+        
+    finally:
+        # Stream termination marker
+        yield 'data: [DONE]\n'
 
 
 async def stream_human_mode(messages: list[ChatMessage], system_prompt: str):
@@ -319,8 +386,11 @@ async def chat_endpoint(request: ChatRequestPayload):
         stream_human_mode(request.messages, request.system_prompt) 
         if request.system_prompt 
         else stream_machine_mode(request.messages),
-        media_type="text/plain" 
+        media_type="text/event-stream" 
     )
     # Helper header for Data Stream Protocol
-    response.headers['x-vercel-ai-data-stream'] = 'v1'
+    response.headers['x-vercel-ai-ui-message-stream'] = 'v1'
+    # Important for SSE: disable chunking/buffering from reverse proxies (like Nginx, Gunicorn)
+    response.headers['Cache-Control'] = 'no-cache, no-transform'
+    response.headers['Connection'] = 'keep-alive'
     return response
