@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 # Import the refactored retriever logic and RAG modules
 from backend.retriever import prewarm_cache
-from backend.rag import HumanRAG, MachineRAG
+from backend.rag import HumanRAG, MachineRAG, AgenticRAG
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +21,7 @@ load_dotenv()
 # Global instances
 human_rag: HumanRAG | None = None
 machine_rag: MachineRAG | None = None
+agentic_rag: AgenticRAG | None = None
 
 
 def configure_lm() -> None:
@@ -43,7 +44,7 @@ def configure_lm() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global human_rag, machine_rag
+    global human_rag, machine_rag, agentic_rag
 
     # Startup
     configure_lm()
@@ -51,6 +52,7 @@ async def lifespan(_: FastAPI):
     logger.info("Initializing RAG pipelines...")
     human_rag = HumanRAG()
     machine_rag = MachineRAG()
+    agentic_rag = AgenticRAG()
 
     # Try to load compiled MachineRAG
     compiled_path = os.path.join(
@@ -90,19 +92,21 @@ async def query(request: QueryRequest):
     if not request.question:
         raise HTTPException(status_code=400, detail="No question provided")
 
-    if human_rag is None or machine_rag is None:
+    if human_rag is None or machine_rag is None or agentic_rag is None:
         raise HTTPException(status_code=503, detail="RAG pipelines not initialized")
 
     try:
         # Run pipelines
-        # TODO: Run in parallel for performance using asyncio.to_thread if they are blocking/sync
-        # DSPy modules are synchronous by default.
-
+        # TODO: Run in parallel for performance
+        
         # Human RAG
         human_pred = human_rag(request.question)
-
+        
         # Machine RAG
         machine_pred = machine_rag(request.question)
+        
+        # Agentic RAG (The "Smart" approach)
+        agentic_pred = agentic_rag(request.question)
 
     except Exception as e:
         logger.error(f"Pipeline execution failed: {e}")
@@ -118,6 +122,10 @@ async def query(request: QueryRequest):
             "context": machine_pred.context,
             "search_query": getattr(machine_pred, "search_query", None),
         },
+        "agentic_answer": {
+            "answer": agentic_pred.answer,
+            "context": getattr(agentic_pred, "history", []), # ReAct history contains steps
+        }
     }
 
 

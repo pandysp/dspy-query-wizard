@@ -71,3 +71,23 @@ class MachineRAG(dspy.Module):  # type: ignore[misc]
         return dspy.Prediction(
             context=context, answer=str(prediction.answer), search_query=search_query
         )  # type: ignore
+
+
+class AgenticSignature(dspy.Signature):  # type: ignore[misc]
+    """Answer complex questions by using search tools to gather information step by step."""
+    
+    question: Any = dspy.InputField()
+    answer: Any = dspy.OutputField(desc="the final answer to the question")
+
+
+class AgenticRAG(dspy.Module):  # type: ignore[misc]
+    """
+    Agentic RAG pipeline using ReAct loop.
+    Allows sequential tool calling and reasoning.
+    """
+    def __init__(self) -> None:
+        super().__init__()
+        self.react = dspy.ReAct(AgenticSignature, tools=[retrieve])  # type: ignore
+
+    def forward(self, question: str) -> dspy.Prediction:  # type: ignore[misc]
+        return self.react(question=question)  # type: ignore
