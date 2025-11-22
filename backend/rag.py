@@ -1,13 +1,13 @@
 import dspy  # type: ignore
-from typing import Any
+from typing import Any, cast
 
 
 class BasicQA(dspy.Signature):  # type: ignore[misc]
     """Answer questions with short factoid answers."""
 
-    context = dspy.InputField(desc="may contain relevant facts")
-    question = dspy.InputField()
-    answer = dspy.OutputField(desc="often between 1 and 5 words")
+    context: Any = dspy.InputField(desc="may contain relevant facts")
+    question: Any = dspy.InputField()
+    answer: Any = dspy.OutputField(desc="often between 1 and 5 words")
 
 
 class HumanRAG(dspy.Module):  # type: ignore[misc]
@@ -24,7 +24,10 @@ class HumanRAG(dspy.Module):  # type: ignore[misc]
         self.generate_answer = dspy.ChainOfThought(BasicQA)  # type: ignore
 
     def forward(self, question: str) -> dspy.Prediction:  # type: ignore[misc]
-        context = self.retrieve(question).passages
+        # Retrieve returns a Prediction which we access passages from
+        retrieved: Any = self.retrieve(question)
+        context = cast(list[str], retrieved.passages)
+
         prediction = self.generate_answer(context=context, question=question)
         return dspy.Prediction(context=context, answer=prediction.answer)  # type: ignore
 
@@ -32,8 +35,8 @@ class HumanRAG(dspy.Module):  # type: ignore[misc]
 class GenerateSearchQuery(dspy.Signature):  # type: ignore[misc]
     """Write a simple search query that will help answer a complex question."""
 
-    question = dspy.InputField()
-    search_query = dspy.OutputField(desc="a simple keyword search query")
+    question: Any = dspy.InputField()
+    search_query: Any = dspy.OutputField(desc="a simple keyword search query")
 
 
 class MachineRAG(dspy.Module):  # type: ignore[misc]
@@ -51,16 +54,15 @@ class MachineRAG(dspy.Module):  # type: ignore[misc]
     def forward(self, question: str) -> dspy.Prediction:  # type: ignore[misc]
         # 1. Rephrase
         rephrased = self.rephrase(question=question)
-        search_query = rephrased.search_query
+        search_query = cast(str, rephrased.search_query)
 
         # 2. Retrieve (using rephrased query)
-        context = self.retrieve(search_query).passages
+        retrieved: Any = self.retrieve(search_query)
+        context = cast(list[str], retrieved.passages)
 
         # 3. Answer
         prediction = self.generate_answer(context=context, question=question)
-        
+
         return dspy.Prediction(
-            context=context,
-            answer=prediction.answer,
-            search_query=search_query
+            context=context, answer=prediction.answer, search_query=search_query
         )  # type: ignore
