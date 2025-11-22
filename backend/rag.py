@@ -27,3 +27,40 @@ class HumanRAG(dspy.Module):  # type: ignore[misc]
         context = self.retrieve(question).passages
         prediction = self.generate_answer(context=context, question=question)
         return dspy.Prediction(context=context, answer=prediction.answer)  # type: ignore
+
+
+class GenerateSearchQuery(dspy.Signature):  # type: ignore[misc]
+    """Write a simple search query that will help answer a complex question."""
+
+    question = dspy.InputField()
+    search_query = dspy.OutputField(desc="a simple keyword search query")
+
+
+class MachineRAG(dspy.Module):  # type: ignore[misc]
+    """
+    Optimized RAG pipeline (Machine approach).
+    Rephrases the question into a search query, retrieves, then answers.
+    """
+
+    def __init__(self, retriever: dspy.Module | None = None) -> None:
+        super().__init__()
+        self.retrieve = retriever if retriever else dspy.Retrieve(k=3)  # type: ignore
+        self.rephrase = dspy.ChainOfThought(GenerateSearchQuery)  # type: ignore
+        self.generate_answer = dspy.ChainOfThought(BasicQA)  # type: ignore
+
+    def forward(self, question: str) -> dspy.Prediction:  # type: ignore[misc]
+        # 1. Rephrase
+        rephrased = self.rephrase(question=question)
+        search_query = rephrased.search_query
+
+        # 2. Retrieve (using rephrased query)
+        context = self.retrieve(search_query).passages
+
+        # 3. Answer
+        prediction = self.generate_answer(context=context, question=question)
+        
+        return dspy.Prediction(
+            context=context,
+            answer=prediction.answer,
+            search_query=search_query
+        )  # type: ignore
