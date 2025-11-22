@@ -39,8 +39,8 @@ class HumanRAG(dspy.Module):  # type: ignore[misc]
 class GenerateSearchQuery(dspy.Signature):  # type: ignore[misc]
     """Write a simple search query that will help answer a complex question."""
 
-    question: Any = dspy.InputField()
-    search_query: Any = dspy.OutputField(desc="a simple keyword search query")
+    question: str = dspy.InputField()
+    search_query: str = dspy.OutputField(desc="a simple keyword search query")
 
 
 class MachineRAG(dspy.Module):  # type: ignore[misc]
@@ -88,10 +88,11 @@ class AgenticSignature(dspy.Signature):  # type: ignore[misc]
     1. Identify missing information.
     2. Use 'search_wikipedia' to find it.
     3. Formulate the answer based ONLY on the retrieved context.
+    4. If the search results contain the answer, output the answer immediately. Do not search again for the same thing.
     """
     
-    question: Any = dspy.InputField()
-    answer: Any = dspy.OutputField(desc="the final answer to the question")
+    question: str = dspy.InputField()
+    answer: str = dspy.OutputField(desc="the final answer to the question")
 
 
 class AgenticRAG(dspy.Module):  # type: ignore[misc]

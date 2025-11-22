@@ -169,19 +169,19 @@ def evaluate(sample_size: int = 10) -> None:
     logger.info("\n" + "="*40)
     logger.info("FINAL SCOREBOARD")
     logger.info("="*40)
-    logger.info(f"{'Pipeline':<10} | {'Recall':<10} | {'Accuracy':<10}")
-    logger.info("-" * 40)
+    logger.info(f"{'Pipeline':<10} | {'Recall (Ret)':<13} | {'Accuracy':<10}")
+    logger.info("-" * 45)
     
     for name, scores in metrics.items():
         recall_pct = get_pct(scores["recall"])
         acc_pct = get_pct(scores["acc"])
-        logger.info(f"{name:<10} | {recall_pct:<9.1f}% | {acc_pct:<9.1f}%")
+        logger.info(f"{name:<10} | {recall_pct:<12.1f}% | {acc_pct:<9.1f}%")
     
-    logger.info("="*40)
+    logger.info("="*45)
     
     # Determine Winner based on Recall
     winner = max(metrics, key=lambda k: metrics[k]["recall"])
-    logger.info(f"Winner (Recall): {winner}")
+    logger.info(f"Winner (Retrieval Accuracy): {winner}")
 
 if __name__ == "__main__":
     evaluate()

@@ -126,6 +126,7 @@ def search_wikipedia(query: str, k: int = 3) -> list[str]:
     """
     Search Wikipedia for documents relevant to the query.
     Use this tool to find facts, dates, places, and people.
+    The query should be a concise keyword search or a specific factual question.
     Returns a list of relevant text passages.
     """
     results = _cached_retrieval_sync(query, k)
