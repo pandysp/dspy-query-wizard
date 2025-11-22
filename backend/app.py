@@ -16,7 +16,7 @@ from openai import AsyncOpenAI
 
 # Import the refactored retriever logic and RAG modules
 from backend.retriever import prewarm_cache, search_wikipedia
-from backend.rag import HumanRAG, MachineRAG, AgenticRAG, AgenticSignature
+from backend.rag import HumanRAG, AgenticRAG, AgenticSignature
 from typing import Any
 
 # Setup logging
@@ -28,7 +28,6 @@ load_dotenv()
 
 # Global instances
 human_rag: HumanRAG | None = None
-machine_rag: MachineRAG | None = None
 agentic_rag: AgenticRAG | None = None
 openai_client: AsyncOpenAI | None = None
 
@@ -61,29 +60,14 @@ def configure_lm() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global human_rag, machine_rag, agentic_rag
+    global human_rag, agentic_rag
 
     # Startup
     configure_lm()
 
     logger.info("Initializing RAG pipelines...")
     human_rag = HumanRAG()
-    machine_rag = MachineRAG()
     agentic_rag = AgenticRAG()
-
-    # Try to load compiled MachineRAG
-    compiled_path = os.path.join(
-        os.path.dirname(__file__), "data", "compiled_machine_rag.json"
-    )
-    if os.path.exists(compiled_path):
-        try:
-            logger.info(f"Loading compiled MachineRAG from {compiled_path}...")
-            machine_rag.load(compiled_path)
-            logger.info("MachineRAG loaded successfully.")
-        except Exception as e:
-            logger.error(f"Failed to load compiled MachineRAG: {e}")
-    else:
-        logger.warning("No compiled MachineRAG found. Using unoptimized version.")
 
     # Try to load compiled AgenticRAG
     compiled_agentic_path = os.path.join(
@@ -131,7 +115,7 @@ async def query(request: QueryRequest):
     if not request.question:
         raise HTTPException(status_code=400, detail="No question provided")
 
-    if human_rag is None or machine_rag is None or agentic_rag is None:
+    if human_rag is None or agentic_rag is None:
         raise HTTPException(status_code=503, detail="RAG pipelines not initialized")
 
     try:
@@ -140,9 +124,6 @@ async def query(request: QueryRequest):
 
         # Human RAG (simulated human effort if manual_queries provided)
         human_pred = human_rag(request.question, queries=request.manual_queries)
-
-        # Machine RAG
-        machine_pred = machine_rag(request.question)
 
         # Agentic RAG (The "Smart" approach)
         def run_agentic_rag_sync(q: str):
@@ -159,11 +140,6 @@ async def query(request: QueryRequest):
     return {
         "question": request.question,
         "human_answer": {"answer": human_pred.answer, "context": human_pred.context},
-        "machine_answer": {
-            "answer": machine_pred.answer,
-            "context": machine_pred.context,
-            "search_query": getattr(machine_pred, "search_query", None),
-        },
         "agentic_answer": {
             "answer": agentic_pred.answer,
             "context": getattr(

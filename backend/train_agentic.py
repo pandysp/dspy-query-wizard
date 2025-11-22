@@ -2,7 +2,7 @@ import dspy  # type: ignore
 import os
 import json
 import logging
-from dspy.teleprompt import BootstrapFewShot  # type: ignore
+from dspy.teleprompt import MIPROv2  # type: ignore
 from dspy.evaluate import answer_exact_match  # type: ignore
 from dotenv import load_dotenv
 from backend.rag import AgenticRAG
@@ -34,17 +34,24 @@ def configure_lm() -> None:
     logger.info(f"LM configured: {full_model_name}")
 
 
-def train(sample_size: int = 20) -> None:
+def train(train_size: int = 3, val_size: int = 2) -> None:
     """
-    Trains the AgenticRAG pipeline using BootstrapFewShot.
+    Trains the AgenticRAG pipeline using MIPROv2.
+
+    Args:
+        train_size: Number of training examples to use (default: 3 for minimal testing)
+        val_size: Number of validation examples to use (default: 2 for minimal testing)
     """
     configure_lm()
-    
-    # Configure a stronger teacher model to generate traces
+
+    # Configure a stronger teacher model for bootstrapping
     api_key = os.getenv("OPENAI_API_KEY")
     teacher_lm = dspy.LM("openai/gpt-5.1", api_key=api_key)
 
-    # 1. Load Training Data
+    # Configure a prompt model for instruction generation (can use same as teacher)
+    prompt_lm = dspy.LM("openai/gpt-5.1", api_key=api_key)
+
+    # 1. Load Training and Validation Data
     data_path = os.path.join(os.path.dirname(__file__), "data", "train.json")
     if not os.path.exists(data_path):
         logger.error(
@@ -52,8 +59,9 @@ def train(sample_size: int = 20) -> None:
         )
         return
 
-    logger.info(f"Loading training data from {data_path}...")
+    logger.info(f"Loading data from {data_path}...")
     trainset = []
+    valset = []
     try:
         with open(data_path, "r", encoding="utf-8") as f:
             # Read line by line or full json
@@ -69,36 +77,56 @@ def train(sample_size: int = 20) -> None:
                 raw_data = [json.loads(line) for line in f]
 
         # Convert to DSPy Examples
-        for item in raw_data[:sample_size]:
+        # Split into train and validation sets
+        total_needed = train_size + val_size
+        for i, item in enumerate(raw_data[:total_needed]):
             example = dspy.Example(
                 question=item["question"], answer=item["answer"]
             ).with_inputs("question")
-            trainset.append(example)
+
+            if i < train_size:
+                trainset.append(example)
+            else:
+                valset.append(example)
 
     except Exception as e:
         logger.error(f"Failed to load data: {e}")
         return
 
-    logger.info(f"Loaded {len(trainset)} examples.")
+    logger.info(f"Loaded {len(trainset)} training examples and {len(valset)} validation examples.")
 
     # 2. Initialize Student (AgenticRAG)
     student = AgenticRAG()
 
-    # 3. Define Optimizer
-    # We optimize for Retrieval Recall
-    # Use teacher_settings to use for bootstrapping traces
-    teleprompter = BootstrapFewShot(
-        metric=answer_in_context, 
-        max_bootstrapped_demos=4, 
-        max_labeled_demos=4,
-        teacher_settings=dict(lm=teacher_lm)
+    # 3. Define MIPROv2 Optimizer
+    # Use "light" auto setting for fast iteration during development
+    teleprompter = MIPROv2(
+        metric=answer_in_context,
+        prompt_model=prompt_lm,
+        task_model=None,  # Will use the configured LM
+        teacher_settings=dict(lm=teacher_lm),
+        max_bootstrapped_demos=1,
+        max_labeled_demos=1,
+        auto="light",  # Use "light" for fast iteration, "medium"/"heavy" for production
+        num_threads=4,  # Parallel evaluation
+        verbose=True,
+        track_stats=True,
     )
 
-    # 4. Compile
-    logger.info("Starting compilation (Agentic) with Teacher (gpt-5.1)...")
+    # 4. Compile with MIPROv2
+    logger.info("Starting MIPROv2 optimization with Teacher (gpt-5.1)...")
+    logger.info("This will optimize both instructions and few-shot examples...")
     try:
-        compiled_rag = teleprompter.compile(student, trainset=trainset)
-        
+        compiled_rag = teleprompter.compile(
+            student,
+            trainset=trainset,
+            valset=valset,
+            # num_trials is set automatically by auto="medium"
+            minibatch=True,
+            minibatch_size=10,
+            minibatch_full_eval_steps=3,
+        )
+
         # 5. Save
         output_path = os.path.join(
             os.path.dirname(__file__), "data", "compiled_agentic_rag.json"
@@ -106,7 +134,7 @@ def train(sample_size: int = 20) -> None:
         logger.info(f"Saving compiled program to {output_path}...")
         compiled_rag.save(output_path)
         logger.info("Training complete.")
-        
+
     except Exception as e:
         logger.error(f"Compilation failed: {e}")
 

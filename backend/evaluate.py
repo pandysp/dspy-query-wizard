@@ -4,7 +4,7 @@ import json
 import logging
 from dspy.evaluate import answer_exact_match  # type: ignore
 from dotenv import load_dotenv
-from backend.rag import HumanRAG, MachineRAG
+from backend.rag import HumanRAG, AgenticRAG
 from backend.metrics import answer_in_context
 
 # Setup logging
@@ -33,7 +33,7 @@ def configure_lm() -> None:
 
 def evaluate(sample_size: int = 10) -> None:
     """
-    Evaluates HumanRAG vs MachineRAG vs AgenticRAG on the eval split.
+    Evaluates HumanRAG vs AgenticRAG on the eval split.
     Collects detailed traces and saves them to 'backend/data/evaluation_analysis.json'.
     """
     configure_lm()
@@ -74,17 +74,7 @@ def evaluate(sample_size: int = 10) -> None:
     # 2. Initialize Pipelines
     logger.info("Initializing HumanRAG...")
     human_rag = HumanRAG()
-    
-    logger.info("Initializing MachineRAG...")
-    machine_rag = MachineRAG()
-    compiled_path = os.path.join(os.path.dirname(__file__), "data", "compiled_machine_rag.json")
-    if os.path.exists(compiled_path):
-        logger.info(f"Loading compiled MachineRAG from {compiled_path}...")
-        machine_rag.load(compiled_path)
-    else:
-        logger.warning("No compiled MachineRAG found! Running unoptimized.")
 
-    from backend.rag import AgenticRAG
     logger.info("Initializing AgenticRAG...")
     agentic_rag = AgenticRAG()
     compiled_agentic_path = os.path.join(os.path.dirname(__file__), "data", "compiled_agentic_rag.json")
@@ -99,7 +89,6 @@ def evaluate(sample_size: int = 10) -> None:
     # Scores: { "Human": {"acc": 0, "recall": 0}, ... }
     metrics = {
         "Human": {"acc": 0, "recall": 0},
-        "Machine": {"acc": 0, "recall": 0},
         "Agentic": {"acc": 0, "recall": 0}
     }
     
@@ -128,9 +117,8 @@ def evaluate(sample_size: int = 10) -> None:
                 return dspy.Prediction(answer="Error", context=[], search_query="Error", history=[]), False, False
 
         human_pred, human_correct, human_recall = run_and_eval(human_rag, "Human")
-        machine_pred, machine_correct, machine_recall = run_and_eval(machine_rag, "Machine")
         agentic_pred, agentic_correct, agentic_recall = run_and_eval(agentic_rag, "Agentic")
-            
+
         # Collect Data
         result_entry = {
             "question": question,
@@ -140,13 +128,6 @@ def evaluate(sample_size: int = 10) -> None:
                 "correct": human_correct,
                 "recall": human_recall,
                 "context_sample": human_pred.context[:1] if hasattr(human_pred, "context") and human_pred.context else []
-            },
-            "machine": {
-                "answer": machine_pred.answer,
-                "correct": machine_correct,
-                "recall": machine_recall,
-                "search_query": getattr(machine_pred, "search_query", None),
-                "context_sample": machine_pred.context[:1] if hasattr(machine_pred, "context") and machine_pred.context else []
             },
             "agentic": {
                 "answer": agentic_pred.answer,
