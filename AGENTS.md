@@ -28,6 +28,7 @@
 - **WTFs/Minute:** Minimize "WTFs/Minute". Write clean, standard, unsurprising code. Refactor hacks immediately.
 
 ### Workflow
+- **Red, Green, Refactor (RGR):** Unless specifically instructed otherwise, always follow the RGR cycle: 1. Write a failing test (Red). 2. Write the minimum code to make the test pass (Green). 3. Improve the code without changing its behavior (Refactor). Always run relevant tests after each 'Green' or 'Refactor' step.
 - **Planning:** Brainstorm architecture and "happy paths" before coding. Use `bd` for all task tracking. Do NOT use internal todo tools/memory.
 - **Verification:** Always test immediately (e.g., `curl`, `pytest`, `just test`) after implementation.
 - **Communication:** Be concise. Focus on "Changes Made" and "Next Steps". Avoid verbose pleasantries.
