@@ -22,6 +22,9 @@
     "@ai-sdk/svelte": "^3.0.99",
     "@tailwindcss/vite": "^4.1.17",
     "ai": "^5.0.99",
+    "axios": "^1.13.2",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.17",
     "tokenx": "^1.2.1"
   }

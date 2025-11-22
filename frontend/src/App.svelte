@@ -1,30 +1,39 @@
 <script lang="ts">
   import AgentChat from "./lib/AgentChat.svelte";
-  import PromptQueryView from "./lib/PromptQueryView.svelte";
-  import type { AIQueryResult } from "./lib/types";
+  import { getSystemMessages } from "./lib/api";
+  import InputEdit from "./lib/InputEdit.svelte";
+  import {
+    inputPrompts,
+    loadInputPrompts,
+    loadSystemMessages,
+    sytemMessages,
+  } from "./lib/configStore.svelte";
 
-  const dummyHuman: AIQueryResult = {
-    prompt: "What is the capital of France?",
-    llm_answer: "Paris.",
-    score: 50,
-    chunks: [],
-  };
+  let running = $state(false);
 
-  const dummyAI: AIQueryResult = {
-    prompt:
-      "What is the capital of France? But rephrased to be more intelligent.",
-    llm_answer: "Paris, your majesty.",
-    score: 75,
-    chunks: [],
-  };
+  loadSystemMessages();
+  loadInputPrompts();
+
+  const loading = $derived(
+    inputPrompts.prompts.length === 0 || sytemMessages.default === "",
+  );
 </script>
 
-<main class="bg-gray-900 text-white min-h-screen">
-  <div class="grid grid-cols-2 w-full gap-0 pt-12">
-    <AgentChat />
+<main class="bg-gray-900 text-gray-400 min-h-screen">
+  {#if !running && !loading}
+    <InputEdit
+      onRunClicked={() => {
+        running = true;
+      }}
+    />
+  {:else}
+    <div class="relative grid grid-cols-2 w-full gap-0 pt-12">
+      <AgentChat systemMessagePrompt={sytemMessages.default} />
+      <AgentChat systemMessagePrompt={sytemMessages.optimized} />
 
-    <div
-      class="absolute translate-x-[-50%] inset-y-4 left-1/2 w-px bg-gray-700"
-    ></div>
-  </div>
+      <div
+        class="absolute translate-x-[-50%] top-4 bottom-4 left-1/2 w-px bg-gray-700"
+      ></div>
+    </div>
+  {/if}
 </main>

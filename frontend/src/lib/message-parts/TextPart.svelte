@@ -6,4 +6,9 @@
   let { text }: Props = $props();
 </script>
 
-<div class="text-gray-900">{text}</div>
+<div
+  class="max-w-xs break-after-all line-clamp-3 hover:line-clamp-none hover:whitespace-normal"
+  title={text}
+>
+  {text}
+</div>
