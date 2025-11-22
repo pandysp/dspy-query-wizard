@@ -240,11 +240,11 @@ async def stream_dspy_generator(stream_gen):
     current_tool_call_id = None
 
     # Send initial message start part
-    yield f'data: {json.dumps({"type": "start", "messageId": message_id})}\n'
+    yield f'data: {json.dumps({"type": "start", "messageId": message_id})}\n\n'
 
     try:
         # Send text-start for the main text block
-        yield f'data: {json.dumps({"type": "text-start", "id": text_id})}\n'
+        yield f'data: {json.dumps({"type": "text-start", "id": text_id})}\n\n'
 
         async for chunk in stream_gen:
 
@@ -258,25 +258,25 @@ async def stream_dspy_generator(stream_gen):
                     # Close current text block if active
                     if reasoning_id is None:
                         reasoning_id = f"reasoning_{uuid.uuid4().hex[:8]}"
-                        yield f'data: {json.dumps({"type": "reasoning-start", "id": reasoning_id})}\n'
+                        yield f'data: {json.dumps({"type": "reasoning-start", "id": reasoning_id})}\n\n'
 
                     if chunk.chunk:
-                        yield f'data: {json.dumps({"type": "reasoning-delta", "id": reasoning_id, "delta": chunk.chunk})}\n'
+                        yield f'data: {json.dumps({"type": "reasoning-delta", "id": reasoning_id, "delta": chunk.chunk})}\n\n'
 
                 # Standard Text output (answer field)
                 else:
                     # Close reasoning if active before emitting text
                     if reasoning_id:
-                        yield f'data: {json.dumps({"type": "reasoning-end", "id": reasoning_id})}\n'
+                        yield f'data: {json.dumps({"type": "reasoning-end", "id": reasoning_id})}\n\n'
                         reasoning_id = None
 
                     if chunk.chunk:
-                        yield f'data: {json.dumps({"type": "text-delta", "id": text_id, "delta": chunk.chunk})}\n'
+                        yield f'data: {json.dumps({"type": "text-delta", "id": text_id, "delta": chunk.chunk})}\n\n'
 
             elif isinstance(chunk, StatusMessage):
                 # Close reasoning if active before emitting status
                 if reasoning_id:
-                    yield f'data: {json.dumps({"type": "reasoning-end", "id": reasoning_id})}\n'
+                    yield f'data: {json.dumps({"type": "reasoning-end", "id": reasoning_id})}\n\n'
                     reasoning_id = None
 
                 # Parse raw status data and map to Vercel Tool events
@@ -290,13 +290,13 @@ async def stream_dspy_generator(stream_gen):
                             "type": "tool-input-start",
                             "toolCallId": current_tool_call_id,
                             "toolName": status_data["toolName"]
-                        })}\n'
+                        })}\n\n'
                         yield f'data: {json.dumps({
                             "type": "tool-input-available",
                             "toolCallId": current_tool_call_id,
                             "toolName": status_data["toolName"],
                             "input": status_data["inputs"] # Pass original inputs
-                        })}\n'
+                        })}\n\n'
 
                     elif status_type == "tool-output-available-raw":
                         if current_tool_call_id:
@@ -304,45 +304,45 @@ async def stream_dspy_generator(stream_gen):
                                 "type": "tool-output-available",
                                 "toolCallId": current_tool_call_id,
                                 "output": status_data["outputs"]
-                            })}\n'
+                            })}\n\n'
                         current_tool_call_id = None  # Reset for next tool call
 
                     else:  # Fallback for other custom status messages as generic data
-                        yield f'data: {json.dumps({"type": "data", "data": {"type": "status", "message": chunk.message}})}\n'
+                        yield f'data: {json.dumps({"type": "data", "data": {"type": "status", "message": chunk.message}})}\n\n'
 
                 except json.JSONDecodeError:
-                    yield f'data: {json.dumps({"type": "data", "data": {"type": "status", "message": chunk.message}})}\n'
+                    yield f'data: {json.dumps({"type": "data", "data": {"type": "status", "message": chunk.message}})}\n\n'
 
             # Fallback: Handle final Prediction object if streaming didn't capture tokens
             elif isinstance(chunk, dspy.primitives.prediction.Prediction):
                 logger.info("Received final Prediction object (fallback).")
                 # Close reasoning if active
                 if reasoning_id:
-                    yield f'data: {json.dumps({"type": "reasoning-end", "id": reasoning_id})}\n'
+                    yield f'data: {json.dumps({"type": "reasoning-end", "id": reasoning_id})}\n\n'
                     reasoning_id = None
 
                 # Emit delta for the answer from fallback, then end the text block
                 if chunk.answer:
-                    yield f'data: {json.dumps({"type": "text-delta", "id": text_id, "delta": chunk.answer})}\n'
+                    yield f'data: {json.dumps({"type": "text-delta", "id": text_id, "delta": chunk.answer})}\n\n'
 
         # Final cleanup and termination messages
         if reasoning_id:
-            yield f'data: {json.dumps({"type": "reasoning-end", "id": reasoning_id})}\n'
+            yield f'data: {json.dumps({"type": "reasoning-end", "id": reasoning_id})}\n\n'
 
         # Ensure the main text block is ended
-        yield f'data: {json.dumps({"type": "text-end", "id": text_id})}\n'
+        yield f'data: {json.dumps({"type": "text-end", "id": text_id})}\n\n'
 
         # Finish message
-        yield f'data: {json.dumps({"type": "finish"})}\n'
+        yield f'data: {json.dumps({"type": "finish"})}\n\n'
 
     except Exception as e:
         logger.error(f"Streaming error: {e}")
         traceback.print_exc()
-        yield f'data: {json.dumps({"type": "error", "errorText": f"Streaming error: {str(e)}"})}\n'
+        yield f'data: {json.dumps({"type": "error", "errorText": f"Streaming error: {str(e)}"})}\n\n'
 
     finally:
         # Stream termination marker
-        yield "data: [DONE]\n"
+        yield "data: [DONE]\n\n"
 
 
 async def stream_human_mode(messages: list[ChatMessage], system_prompt: str):
