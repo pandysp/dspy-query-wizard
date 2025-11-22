@@ -1,19 +1,9 @@
 <script lang="ts">
   import { Chat } from "@ai-sdk/svelte";
   import { DefaultChatTransport } from "ai";
-
-  // Import message part components
-  import {
-    TextPart,
-    ToolCallPart,
-    ToolCalledPart,
-    ToolResultPart,
-    ToolErrorPart,
-    ToolStatePart,
-    ToolNoStatePart,
-    ReasoningPart,
-    UnknownPart,
-  } from "./message-parts";
+  import { AgentResponseProcessor, type AgentPhase, type StreamEvent } from "./agent-response-processor";
+  import { ResearchPhase, ReasoningPhase, AnswerPhase } from "./phase-components";
+  import { TextPart } from "./message-parts";
   import { cn } from "./utils";
   import { inputPrompts, selectedInputPrompt } from "./configStore.svelte";
 
@@ -50,36 +40,103 @@
       isLoading = false;
     },
     onError: (error) => {
+      console.error("❌ Stream error:", error);
       isLoading = false;
     },
-  });
-
-  // Debug: Log messages as they update
-  $effect(() => {
-    if (chat.messages.length > 0) {
-      const lastMessage = chat.messages[chat.messages.length - 1];
-      console.log(
-        "📨 Last message parts:",
-        lastMessage.parts.map((p) => ({
-          type: p.type,
-          state: "state" in p ? p.state : undefined,
-          hasInput: "input" in p,
-          hasOutput: "output" in p,
-        })),
-      );
-    }
   });
 
   const getRoleEmoji = (role: string) => {
     switch (role) {
       case "user":
         return "👤";
-      case "agent":
+      case "assistant":
         return "🤖";
       case "system":
         return "⚙️";
+      default:
+        return "🔹";
     }
   };
+
+  // Transform message parts into phases for agent messages
+  function transformPartsToPhases(parts: any[]): AgentPhase[] {
+    console.log("🔄 Transforming parts:", parts.map((p: any) => p.type));
+    const processor = new AgentResponseProcessor();
+
+    for (const part of parts) {
+      // Handle tool calls (type starts with "tool-")
+      if (part.type && part.type.startsWith("tool-")) {
+        const toolName = part.type.replace("tool-", "");
+
+        // Tool input start
+        processor.processEvent({
+          type: "tool-input-start",
+          toolCallId: part.toolCallId || crypto.randomUUID(),
+          toolName: toolName,
+        } as StreamEvent);
+
+        // Tool input available
+        if ("input" in part) {
+          processor.processEvent({
+            type: "tool-input-available",
+            toolCallId: part.toolCallId || crypto.randomUUID(),
+            toolName: toolName,
+            input: part.input as Record<string, unknown>,
+          } as StreamEvent);
+        }
+
+        // Tool output
+        if ("state" in part && part.state === "output-available" && "output" in part) {
+          processor.processEvent({
+            type: "tool-output-available",
+            toolCallId: part.toolCallId || crypto.randomUUID(),
+            output: part.output,
+          } as StreamEvent);
+        }
+      }
+      // Handle reasoning (aggregated by AI SDK)
+      else if (part.type === "reasoning") {
+        processor.processEvent({
+          type: "reasoning-start",
+          id: crypto.randomUUID(),
+        } as StreamEvent);
+
+        if ("text" in part && part.text) {
+          processor.processEvent({
+            type: "reasoning-delta",
+            delta: part.text,
+          } as StreamEvent);
+        }
+
+        processor.processEvent({
+          type: "reasoning-end",
+        } as StreamEvent);
+      }
+      // Handle text
+      else if (part.type === "text") {
+        processor.processEvent({
+          type: "text-start",
+          id: crypto.randomUUID(),
+        } as StreamEvent);
+
+        if ("text" in part && part.text) {
+          processor.processEvent({
+            type: "text-delta",
+            delta: part.text,
+          } as StreamEvent);
+        }
+
+        processor.processEvent({
+          type: "text-end",
+        } as StreamEvent);
+      }
+    }
+
+    processor.processEvent({ type: "finish" } as StreamEvent);
+    const phases = processor.getPhases();
+    console.log("✅ Generated phases:", phases.map(p => `${p.type}(${p.toolCalls?.length || 0} tools, ${p.thoughts ? 'thoughts' : 'no thoughts'}, ${p.answer ? 'answer' : 'no answer'})`));
+    return phases;
+  }
 
   const fullMessages = $derived(() => {
     const backendMessages = chat.messages;
@@ -92,21 +149,12 @@
             text: systemMessagePrompt,
           },
         ],
+        phases: [] as AgentPhase[],
       },
       ...backendMessages.map((msg) => ({
         ...msg,
-        parts: msg.parts.filter((part) => {
-          // Always filter out incomplete tool calls as before
-          const isIncompleteToolCall =
-            part.type &&
-            part.type.startsWith?.("tool-") &&
-            "state" in part &&
-            "input" in part &&
-            part.input !== undefined &&
-            part.state !== "output-available";
-
-          return !isIncompleteToolCall;
-        }),
+        // Keep original parts for system/user messages, transform for assistant
+        phases: msg.role === "assistant" ? transformPartsToPhases(msg.parts) : [] as AgentPhase[],
       })),
     ];
 
@@ -115,7 +163,7 @@
 
   $effect(() => {
     // Find first tool result for EVALUATE_TOOL
-    for (const message of fullMessages()) {
+    for (const message of chat.messages) {
       for (const part of message.parts) {
         if (
           part.type === `tool-${EVALUATE_TOOL}` &&
@@ -166,66 +214,27 @@
         <div
           class={cn("space-y-2 mt-2", message.role === "system" && "min-h-22")}
         >
-          {#each message.parts as part, partIndex (partIndex)}
-            <div class="rounded-sm bg-black text-gray-400 p-1 w-fit pl-2 pr-4">
-              {#if part.type === "text"}
-                <TextPart text={part.text} />
-              {:else if part.type.startsWith("tool-")}
-                {@const toolName = part.type.replace("tool-", "")}
-
-                {#if "state" in part}
-                  <!-- Show tool call info when we have input (not yet completed) -->
-                  {#if "input" in part && part.input !== undefined && part.state !== "output-available"}
-                    <ToolCallPart
-                      {toolName}
-                      input={part.input}
-                      state={part.state}
-                    />
-                  {/if}
-
-                  <!-- Show tool result when available -->
-                  {#if part.state === "output-available"}
-                    <!-- Show input first -->
-                    {#if "input" in part && part.input !== undefined}
-                      <ToolCalledPart {toolName} input={part.input} />
-                    {/if}
-
-                    <!-- Then show output -->
-                    {#if "output" in part}
-                      <ToolResultPart {toolName} output={part.output} />
-                    {/if}
-                  {:else if part.state === "output-error"}
-                    <ToolErrorPart
-                      {toolName}
-                      errorText={"errorText" in part && part.errorText
-                        ? String(part.errorText)
-                        : undefined}
-                    />
-                  {:else if part.state === "streaming" || part.state === "done"}
-                    <ToolStatePart {toolName} state={part.state} />
-                  {/if}
-                {:else}
-                  <!-- No state property - show debug -->
-                  <ToolNoStatePart type={part.type} data={part} />
-                {/if}
-              {:else if part.type === "data-reasoning"}
-                {#if "data" in part && part.data && typeof part.data === "object"}
-                  {@const data = part.data as Record<string, unknown>}
-                  {@const status =
-                    typeof data.status === "string" ? data.status : "unknown"}
-                  {@const toolName =
-                    typeof data.toolName === "string"
-                      ? data.toolName
-                      : undefined}
-
-                  <ReasoningPart {status} {toolName} {data} />
-                {/if}
-              {:else}
-                <!-- Unknown part types (for debugging) -->
-                <UnknownPart type={part.type} data={part} />
+          {#if message.role === "assistant" && message.phases && message.phases.length > 0}
+            <!-- Render agent messages using phases -->
+            {#each message.phases as phase (phase.id)}
+              {#if phase.type === "research"}
+                <ResearchPhase {phase} />
+              {:else if phase.type === "reasoning"}
+                <ReasoningPhase {phase} />
+              {:else if phase.type === "answer"}
+                <AnswerPhase {phase} />
               {/if}
-            </div>
-          {/each}
+            {/each}
+          {:else}
+            <!-- Render system/user messages using simple text parts -->
+            {#each message.parts as part, partIndex (partIndex)}
+              {#if part.type === "text"}
+                <div class="rounded-sm bg-black text-gray-400 p-1 w-fit pl-2 pr-4">
+                  <TextPart text={part.text} />
+                </div>
+              {/if}
+            {/each}
+          {/if}
         </div>
       </div>
     {/each}
