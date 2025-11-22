@@ -2,7 +2,7 @@ from fastapi.applications import FastAPI
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 import uvicorn
 from contextlib import asynccontextmanager
 import os
@@ -17,6 +17,7 @@ from openai import AsyncOpenAI
 # Import the refactored retriever logic and RAG modules
 from backend.retriever import prewarm_cache, search_wikipedia
 from backend.rag import HumanRAG, MachineRAG, AgenticRAG, AgenticSignature
+from typing import Any
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -177,7 +178,22 @@ async def query(request: QueryRequest):
 
 class ChatMessage(BaseModel):
     role: str
-    content: str
+    content: str = ""
+    parts: list[dict] | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def extract_content_from_parts(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # If content is missing or empty, try to extract from parts
+            if not data.get("content") and data.get("parts"):
+                parts = data["parts"]
+                text_content = []
+                for part in parts:
+                    if part.get("type") == "text":
+                        text_content.append(part.get("text", ""))
+                data["content"] = "\n".join(text_content)
+        return data
 
 
 class ChatRequestPayload(BaseModel):
@@ -396,13 +412,6 @@ async def stream_machine_mode(messages: list[ChatMessage]):
     )
 
     output_stream = stream_react(question=question)
-
-    prompt_data = {
-        "type": "dspy-prompt",
-        "messages": [{"role": "system", "content": "Optimized Agentic ReAct Pipeline"}],
-        "info": "Running compiled dspy.ReAct module with automated tool use.",
-    }
-    yield f"2:[{json.dumps(prompt_data)}]\n"
 
     async for chunk in stream_dspy_generator(output_stream):
         yield chunk
