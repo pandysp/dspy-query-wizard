@@ -214,7 +214,6 @@ async def stream_dspy_generator(stream_gen):
         yield f'data: {json.dumps({"type": "text-start", "id": text_id})}\n'
 
         async for chunk in stream_gen:
-            logger.info(f"DEBUG: Raw chunk type from dspy.streamify: {type(chunk)}")
             
             if isinstance(chunk, StreamResponse):
                 # Reasoning Part (next_thought, rationale, reasoning)
