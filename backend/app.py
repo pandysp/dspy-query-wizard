@@ -4,12 +4,13 @@ import uvicorn
 from contextlib import asynccontextmanager
 
 # Import the refactored retriever logic
-from backend.retriever import fetch_colbert_results, prewarm_cache
+from backend.retriever import fetch_colbert_results, prewarm_cache, configure_retriever
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     # Startup
+    configure_retriever()
     await prewarm_cache()
     yield
     # Shutdown (optional cleanup)

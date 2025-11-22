@@ -5,7 +5,10 @@ from typing import Any, NotRequired, TypedDict, override
 from joblib import Memory  # type: ignore
 import os
 import asyncio
+import logging
 
+# Set up logging
+logger = logging.getLogger(__name__)
 
 # Type definitions for API responses
 class RetrievalResult(TypedDict):
@@ -20,7 +23,7 @@ class RetrievalResult(TypedDict):
 # --- Configuration ---
 # Local ColBERT server (https://github.com/nielsgl/colbert-server)
 # Start with: uvx colbert-server serve --from-cache --port 2017
-COLBERT_URL = "http://127.0.0.1:2017/api/search"
+COLBERT_URL = os.getenv("COLBERT_URL", "http://127.0.0.1:2017/api/search")
 WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
 USER_AGENT = "DSPy-Query-Wizard/1.0 (https://github.com/yourusername/dspy-query-wizard; contact@example.com)"
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "../.cache")
@@ -72,8 +75,9 @@ def _cached_retrieval_sync(query: str, k: int) -> list[RetrievalResult]:
                     )
                     for i, p in enumerate(passages[:k])
                 ]
-        except Exception:
-            pass  # Proceed to fallback
+        except Exception as e:
+            logger.warning(f"ColBERT retrieval failed for '{query}': {e}")
+            # Proceed to fallback
 
         try:
             # 2. Wikipedia Fallback
@@ -115,7 +119,7 @@ def _cached_retrieval_sync(query: str, k: int) -> list[RetrievalResult]:
                 )
             return results
         except Exception as e:
-            print(f"[Retriever] All methods failed for '{query}': {e}")
+            logger.error(f"All retrieval methods failed for '{query}': {e}")
             return [RetrievalResult(text="Failed to retrieve", pid=-1, score=0.0)]
 
 
@@ -133,14 +137,14 @@ async def prewarm_cache() -> None:
     """
     Fires off requests for known demo questions to populate the cache.
     """
-    print("[Cache] Pre-warming started...")
+    logger.info("Cache Pre-warming started...")
 
     tasks = [fetch_colbert_results(q, k=3) for q in PREWARM_QUESTIONS]
     _ = await asyncio.gather(*tasks)
-    print("[Cache] Pre-warming complete.")
+    logger.info("Cache Pre-warming complete.")
 
 
-class AsyncColBERTv2RM(dspy.Retrieve):  # type: ignore[misc]
+class ColBERTv2RM(dspy.Retrieve):  # type: ignore[misc]
     """
     DSPy-compatible wrapper for the optimizer loop (Synchronous).
     """
@@ -178,6 +182,7 @@ class AsyncColBERTv2RM(dspy.Retrieve):  # type: ignore[misc]
         return dspy.Prediction(passages=passages)  # type: ignore[misc]
 
 
-# Configure Global Retriever for DSPy
-rm = AsyncColBERTv2RM()
-dspy.settings.configure(rm=rm)  # type: ignore[misc]
+def configure_retriever() -> None:
+    """Configures the global DSPy retriever."""
+    rm = ColBERTv2RM()
+    dspy.settings.configure(rm=rm)  # type: ignore[misc]
