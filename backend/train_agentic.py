@@ -6,6 +6,7 @@ from dspy.teleprompt import BootstrapFewShot  # type: ignore
 from dspy.evaluate import answer_exact_match  # type: ignore
 from dotenv import load_dotenv
 from backend.rag import AgenticRAG
+from backend.metrics import answer_in_context
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -80,10 +81,9 @@ def train(sample_size: int = 20) -> None:
     student = AgenticRAG()
 
     # 3. Define Optimizer
-    # We optimize for exact match on the final answer
-    # BootstrapFewShot works for ReAct by extracting successful traces
+    # We optimize for Retrieval Recall (answer appearing in context)
     teleprompter = BootstrapFewShot(
-        metric=answer_exact_match, max_bootstrapped_demos=4, max_labeled_demos=4
+        metric=answer_in_context, max_bootstrapped_demos=4, max_labeled_demos=4
     )
 
     # 4. Compile

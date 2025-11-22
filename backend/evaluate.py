@@ -2,9 +2,10 @@ import dspy  # type: ignore
 import os
 import json
 import logging
-from dspy.evaluate import Evaluate, answer_exact_match  # type: ignore
+from dspy.evaluate import answer_exact_match  # type: ignore
 from dotenv import load_dotenv
 from backend.rag import HumanRAG, MachineRAG
+from backend.metrics import answer_in_context
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -33,6 +34,7 @@ def configure_lm() -> None:
 def evaluate(sample_size: int = 10) -> None:
     """
     Evaluates HumanRAG vs MachineRAG vs AgenticRAG on the eval split.
+    Collects detailed traces and saves them to 'backend/data/evaluation_analysis.json'.
     """
     configure_lm()
 
@@ -82,7 +84,6 @@ def evaluate(sample_size: int = 10) -> None:
     else:
         logger.warning("No compiled MachineRAG found! Running unoptimized.")
 
-    # Import AgenticRAG dynamically to avoid circular dependency if any (though fine here)
     from backend.rag import AgenticRAG
     logger.info("Initializing AgenticRAG...")
     agentic_rag = AgenticRAG()
@@ -93,48 +94,94 @@ def evaluate(sample_size: int = 10) -> None:
     else:
         logger.warning("No compiled AgenticRAG found! Running unoptimized.")
 
-    # 3. Run Evaluation
-    # dspy.Evaluate allows us to run metric over devset
-    evaluator = Evaluate(devset=devset, metric=answer_exact_match, num_threads=1, display_progress=True, display_table=0)
-
-    logger.info("\n--- Evaluating HumanRAG ---")
-    human_score = evaluator(human_rag)
+    # 3. Custom Evaluation Loop
+    results = []
+    # Scores: { "Human": {"acc": 0, "recall": 0}, ... }
+    metrics = {
+        "Human": {"acc": 0, "recall": 0},
+        "Machine": {"acc": 0, "recall": 0},
+        "Agentic": {"acc": 0, "recall": 0}
+    }
     
-    logger.info("\n--- Evaluating MachineRAG ---")
-    machine_score = evaluator(machine_rag)
+    logger.info("\n--- Starting Evaluation Loop ---")
     
-    logger.info("\n--- Evaluating AgenticRAG ---")
-    agentic_score = evaluator(agentic_rag)
-
-    # 4. Scoreboard
-    logger.info("\n" + "="*30)
-    logger.info("FINAL SCOREBOARD")
-    logger.info("="*30)
-    logger.info(f"HumanRAG Accuracy:   {human_score}")
-    logger.info(f"MachineRAG Accuracy: {machine_score}")
-    logger.info(f"AgenticRAG Accuracy: {agentic_score}")
-    logger.info("="*30)
-    
-    scores = {"Human": human_score, "Machine": machine_score, "Agentic": agentic_score}
-    # Assuming EvaluationResult has a .score attribute or is float-like
-    # If it's EvaluationResult, we need to extract score.
-    # Based on previous run, it printed "3.0".
-    # If it compares as numbers, good.
-    # We'll try to find max.
-    
-    try:
-        # Extract float if possible
-        clean_scores = {}
-        for k, v in scores.items():
-            if hasattr(v, "score"):
-                clean_scores[k] = v.score
-            else:
-                clean_scores[k] = v
+    for i, example in enumerate(devset):
+        question = example.question
+        gold_answer = example.answer
         
-        winner = max(clean_scores, key=clean_scores.get)
-        logger.info(f"Winner: {winner}")
-    except Exception:
-        logger.info("Could not determine winner automatically.")
+        logger.info(f"[{i+1}/{len(devset)}] Q: {question}")
+        
+        # Helper to run and eval
+        def run_and_eval(pipeline, name):
+            try:
+                pred = pipeline(question)
+                correct = answer_exact_match(example, pred)
+                recall = answer_in_context(example, pred)
+                
+                if correct: metrics[name]["acc"] += 1
+                if recall: metrics[name]["recall"] += 1
+                
+                return pred, correct, recall
+            except Exception as e:
+                logger.error(f"{name} failed: {e}")
+                # Return dummy prediction
+                return dspy.Prediction(answer="Error", context=[], search_query="Error", history=[]), False, False
+
+        human_pred, human_correct, human_recall = run_and_eval(human_rag, "Human")
+        machine_pred, machine_correct, machine_recall = run_and_eval(machine_rag, "Machine")
+        agentic_pred, agentic_correct, agentic_recall = run_and_eval(agentic_rag, "Agentic")
+            
+        # Collect Data
+        result_entry = {
+            "question": question,
+            "gold_answer": gold_answer,
+            "human": {
+                "answer": human_pred.answer,
+                "correct": human_correct,
+                "recall": human_recall,
+                "context_sample": human_pred.context[:1] if hasattr(human_pred, "context") and human_pred.context else []
+            },
+            "machine": {
+                "answer": machine_pred.answer,
+                "correct": machine_correct,
+                "recall": machine_recall,
+                "search_query": getattr(machine_pred, "search_query", None),
+                "context_sample": machine_pred.context[:1] if hasattr(machine_pred, "context") and machine_pred.context else []
+            },
+            "agentic": {
+                "answer": agentic_pred.answer,
+                "correct": agentic_correct,
+                "recall": agentic_recall,
+                "trace": getattr(agentic_pred, "history", [])
+            }
+        }
+        results.append(result_entry)
+
+    # 4. Save Artifacts
+    analysis_path = os.path.join(os.path.dirname(__file__), "data", "evaluation_analysis.json")
+    logger.info(f"Saving analysis to {analysis_path}...")
+    with open(analysis_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2)
+
+    # 5. Scoreboard
+    def get_pct(val): return (val / len(devset)) * 100
+
+    logger.info("\n" + "="*40)
+    logger.info("FINAL SCOREBOARD")
+    logger.info("="*40)
+    logger.info(f"{'Pipeline':<10} | {'Recall':<10} | {'Accuracy':<10}")
+    logger.info("-" * 40)
+    
+    for name, scores in metrics.items():
+        recall_pct = get_pct(scores["recall"])
+        acc_pct = get_pct(scores["acc"])
+        logger.info(f"{name:<10} | {recall_pct:<9.1f}% | {acc_pct:<9.1f}%")
+    
+    logger.info("="*40)
+    
+    # Determine Winner based on Recall
+    winner = max(metrics, key=lambda k: metrics[k]["recall"])
+    logger.info(f"Winner (Recall): {winner}")
 
 if __name__ == "__main__":
     evaluate()
