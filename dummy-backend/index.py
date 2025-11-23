@@ -36,7 +36,7 @@ def configure_lm() -> None:
         print("WARNING: OPENAI_API_KEY not found. DSPy will fail.")
         return
 
-    model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini-mini")
     if not model_name.startswith("openai/"):
         full_model_name = f"openai/{model_name}"
     else:
@@ -366,7 +366,7 @@ async def stream_dspy_text(messages: List[ClientMessage], protocol: str = "data"
 def stream_openai_text(messages: List[ClientMessage], protocol: str = "data"):
     stream = client.chat.completions.create(
         messages=messages,
-        model="gpt-4o",
+        model="gpt-4o-mini",
         stream=True,
         tools=[
             {

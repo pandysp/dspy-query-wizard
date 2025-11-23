@@ -1,26 +1,18 @@
-set shell := ["powershell.exe", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command"]
-# or if you're using PowerShell Core:
-# set shell := ["pwsh", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command"]
-
-
 # Install dependencies
 install:
     uv sync
 
 # Start ColBERT server (required for retrieval)
 colbert-start:
-    ./scripts/start-colbert-server.ps1
+    ./scripts/start-colbert-server.sh
 
 # Stop ColBERT server
 colbert-stop:
-    Get-Process -Name "python" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*backend/colbert_server.py*" } | Stop-Process -Force
-    # Also kill the cmd wrapper if possible, but python is the main one.
-    # Or just tell user to kill it.
-    Write-Host "Attempted to stop server. Verify with colbert-status."
+    pkill -f "colbert-server serve" || echo "No ColBERT server running"
 
 # Check ColBERT server status
 colbert-status:
-    @try { Invoke-RestMethod 'http://127.0.0.1:2017/api/search?query=test&k=1' -ErrorAction Stop | Out-Null; Write-Host "✅ ColBERT server is running" } catch { Write-Host "❌ ColBERT server is not responding" }
+    @curl -s 'http://127.0.0.1:2017/api/search?query=test&k=1' > /dev/null && echo "✅ ColBERT server is running" || echo "❌ ColBERT server is not responding"
 
 # View ColBERT server logs
 colbert-logs:
@@ -37,6 +29,14 @@ run:
 # Run tests
 test:
     uv run pytest
+
+# Train AgenticRAG with MIPROv2
+train:
+    uv run python -m backend.train_agentic
+
+# Evaluate HumanRAG vs AgenticRAG
+eval:
+    uv run python -m backend.evaluate
 
 # Run linter and formatter
 lint:

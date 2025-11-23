@@ -42,7 +42,7 @@ def configure_lm() -> None:
 
     openai_client = AsyncOpenAI(api_key=api_key)
 
-    model_name = os.getenv("OPENAI_MODEL", "gpt-5-mini")
+    model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     if not model_name.startswith("openai/"):
         full_model_name = f"openai/{model_name}"
     else:
@@ -413,9 +413,25 @@ async def chat_endpoint(request: ChatRequestPayload):
 
 @app.get("/system_messages")
 async def get_system_messages():
+    """Returns the baseline and optimized system instructions for AgenticRAG."""
+    if agentic_rag is None:
+        raise HTTPException(status_code=503, detail="AgenticRAG not initialized")
+
+    # Default: Baseline AgenticSignature instructions (unoptimized)
+    default_instructions = AgenticSignature.__doc__ or "No baseline instructions found"
+
+    # Optimized: Get the compiled instructions from the loaded AgenticRAG instance
+    # The ReAct module has a 'react' predictor that holds the signature
+    optimized_signature = agentic_rag.react.react.signature
+    optimized_instructions = (
+        optimized_signature.instructions
+        if hasattr(optimized_signature, 'instructions')
+        else (optimized_signature.__doc__ or "No optimized instructions found")
+    )
+
     return {
-        "default": "You are a helpful assistant that can answer questions and help with tasks.",
-        "optimized": "You are a machine god. You are in charge of the universe. You are the only one who can answer questions and help with tasks.",
+        "default": default_instructions,
+        "optimized": optimized_instructions,
     }
 
 

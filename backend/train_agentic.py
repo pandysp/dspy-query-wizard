@@ -22,8 +22,8 @@ def configure_lm() -> None:
         logger.warning("OPENAI_API_KEY not found. DSPy optimization will likely fail.")
         return
 
-    # Default to gpt-5-mini as requested
-    model_name = os.getenv("OPENAI_MODEL", "gpt-5-mini")
+    # Default to gpt-4o-mini as requested
+    model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     if not model_name.startswith("openai/"):
         full_model_name = f"openai/{model_name}"
     else:
@@ -34,22 +34,22 @@ def configure_lm() -> None:
     logger.info(f"LM configured: {full_model_name}")
 
 
-def train(train_size: int = 3, val_size: int = 2) -> None:
+def train(train_size: int = 5, val_size: int = 3) -> None:
     """
     Trains the AgenticRAG pipeline using MIPROv2.
 
     Args:
-        train_size: Number of training examples to use (default: 3 for minimal testing)
-        val_size: Number of validation examples to use (default: 2 for minimal testing)
+        train_size: Number of training examples to use (default: 5 for balanced optimization)
+        val_size: Number of validation examples to use (default: 3 for balanced optimization)
     """
     configure_lm()
 
     # Configure a stronger teacher model for bootstrapping
     api_key = os.getenv("OPENAI_API_KEY")
-    teacher_lm = dspy.LM("openai/gpt-5.1", api_key=api_key)
+    teacher_lm = dspy.LM("openai/gpt-5-mini", api_key=api_key)
 
     # Configure a prompt model for instruction generation (can use same as teacher)
-    prompt_lm = dspy.LM("openai/gpt-5.1", api_key=api_key)
+    prompt_lm = dspy.LM("openai/gpt-5-mini", api_key=api_key)
 
     # 1. Load Training and Validation Data
     data_path = os.path.join(os.path.dirname(__file__), "data", "train.json")
@@ -99,29 +99,29 @@ def train(train_size: int = 3, val_size: int = 2) -> None:
     student = AgenticRAG()
 
     # 3. Define MIPROv2 Optimizer
-    # Use "light" auto setting for fast iteration during development
+    # Use "medium" auto setting for balanced optimization (<30min runtime)
     teleprompter = MIPROv2(
         metric=answer_in_context,
         prompt_model=prompt_lm,
         task_model=None,  # Will use the configured LM
         teacher_settings=dict(lm=teacher_lm),
-        max_bootstrapped_demos=1,
-        max_labeled_demos=1,
-        auto="light",  # Use "light" for fast iteration, "medium"/"heavy" for production
-        num_threads=4,  # Parallel evaluation
+        max_bootstrapped_demos=2,  # Slightly more bootstrapped examples
+        max_labeled_demos=2,  # Slightly more labeled examples
+        auto="medium",  # Balanced iterations for better optimization
+        num_threads=20,  # Parallel evaluation
         verbose=True,
         track_stats=True,
     )
 
     # 4. Compile with MIPROv2
-    logger.info("Starting MIPROv2 optimization with Teacher (gpt-5.1)...")
+    logger.info("Starting MIPROv2 optimization with Teacher (gpt-5-mini)...")
     logger.info("This will optimize both instructions and few-shot examples...")
     try:
         compiled_rag = teleprompter.compile(
             student,
             trainset=trainset,
             valset=valset,
-            # num_trials is set automatically by auto="medium"
+            # num_trials and other params set automatically by auto="medium"
             minibatch=True,
             minibatch_size=10,
             minibatch_full_eval_steps=3,

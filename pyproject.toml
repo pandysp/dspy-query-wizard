@@ -24,15 +24,16 @@ dependencies = [
     "faiss-cpu",
 ]
 
-[[tool.uv.index]]
-name = "pytorch"
-url = "https://download.pytorch.org/whl/cu121"
-explicit = true
-
-[tool.uv.sources]
-torch = [{ index = "pytorch" }]
-torchvision = [{ index = "pytorch" }]
-torchaudio = [{ index = "pytorch" }]
+# PyTorch sources - uncomment for CUDA on Linux/Windows
+# [[tool.uv.index]]
+# name = "pytorch"
+# url = "https://download.pytorch.org/whl/cu121"
+# explicit = true
+#
+# [tool.uv.sources]
+# torch = [{ index = "pytorch" }]
+# torchvision = [{ index = "pytorch" }]
+# torchaudio = [{ index = "pytorch" }]
 
 [dependency-groups]
 dev = [
