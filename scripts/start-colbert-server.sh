@@ -17,13 +17,12 @@ echo ""
 
 # Kill any existing colbert-server processes
 pkill -f "colbert-server serve" 2>/dev/null || true
+pkill -f "backend/colbert_server.py" 2>/dev/null || true
 
 # Start the server
 # Using nohup to keep it running in background
-nohup uvx colbert-server serve \
-    --from-cache \
-    --port "$PORT" \
-    --host 127.0.0.1 \
+# We use the local backend/colbert_server.py which uses the project's environment (with CUDA)
+nohup uv run python backend/colbert_server.py \
     > "$LOG_FILE" 2>&1 &
 
 SERVER_PID=$!

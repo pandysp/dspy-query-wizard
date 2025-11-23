@@ -55,6 +55,7 @@ def _cached_retrieval_sync(query: str, k: int) -> list[RetrievalResult]:
             resp = client.get(COLBERT_URL, params={"query": query, "k": k}, timeout=2.0)
             # resp.json() returns Any from untyped httpx, but we know it's dict-like
             data: Any = resp.json()
+            
             if data.get("error") is True:
                 raise Exception("Server Error")
 

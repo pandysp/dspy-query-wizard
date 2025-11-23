@@ -434,4 +434,22 @@ async def get_input_prompts():
             "id": "3",
             "prompt": "Why is the sky blue?",
         },
+        {
+            "id": "4",
+            "prompt": "2014 S/S is the debut album of a South Korean boy group that was formed by who?",
+        },
+        {
+            "id": "5",
+            "prompt": "Hayden is a singer-songwriter from Canada, but where does Buck-Tick hail from?",
+        },
+        {   "id": "6",
+            "prompt": "Which Australian city founded in 1838 contains a boarding school opened by a Prime Minister of Australia and named after a school in London of the same name.",
+        },
+        {   "id": "7",
+            "prompt": "Hamilton's stationary-action principle ultimately echoes an earlier formulation that inspired Euler's analytic generalization and Lagrange's later formal calculus of variations. The thinker who introduced that precursor principle also served as the inaugural president of a major Prussian scientific academy, conducted a polar expedition to clarify the Earth's oblateness, and articulated an integral form describing nature's “economy” in its choice of physical paths. Who was this originator of that idea?",
+        },
+        {
+            "id": "8",
+            "prompt": "Who was the Enlightenment-era polymath whose formulation of a nature-governing integral paralleled his leadership role in a scientific academy established at the invitation of a philosophically minded Prussian king, and whose northern expedition provided decisive evidence about the Earth's figure?",
+        },
     ]

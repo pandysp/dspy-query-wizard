@@ -1,18 +1,26 @@
+set shell := ["powershell.exe", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command"]
+# or if you're using PowerShell Core:
+# set shell := ["pwsh", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command"]
+
+
 # Install dependencies
 install:
     uv sync
 
 # Start ColBERT server (required for retrieval)
 colbert-start:
-    ./scripts/start-colbert-server.sh
+    ./scripts/start-colbert-server.ps1
 
 # Stop ColBERT server
 colbert-stop:
-    pkill -f "colbert-server serve" || echo "No ColBERT server running"
+    Get-Process -Name "python" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*backend/colbert_server.py*" } | Stop-Process -Force
+    # Also kill the cmd wrapper if possible, but python is the main one.
+    # Or just tell user to kill it.
+    Write-Host "Attempted to stop server. Verify with colbert-status."
 
 # Check ColBERT server status
 colbert-status:
-    @curl -s 'http://127.0.0.1:2017/api/search?query=test&k=1' > /dev/null && echo "✅ ColBERT server is running" || echo "❌ ColBERT server is not responding"
+    @try { Invoke-RestMethod 'http://127.0.0.1:2017/api/search?query=test&k=1' -ErrorAction Stop | Out-Null; Write-Host "✅ ColBERT server is running" } catch { Write-Host "❌ ColBERT server is not responding" }
 
 # View ColBERT server logs
 colbert-logs:
